@@ -26,7 +26,7 @@ def notesheet_security(notesheet):
         if line[0] == "#" or line == "" or line[0] == "|":
             continue
 
-        if not bool(re.match(r'([0-9.\s]|SH|SP)*$', line.upper())):
+        if not bool(re.match(r'([0-9.\s|]|SH|SP)*$', line.upper())):
             print("Notesheet uses invalid characters.")
             time.sleep(3)
             sys.exit()
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     indicator = ">>>"
     while True:
         # TODO add Settings
-        title: str = 'Rafiano'
+        title: str = 'Rafiano | use up and down arrows for controlling'
 
         main_menu_options = [x["name"] + " by " + x["creator"] for x in notesheet_data]
         main_index = pick(main_menu_options, title, indicator)
