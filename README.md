@@ -1,5 +1,16 @@
 # Rafiano
+
 ---
+# I TAKE NO RESPONSIBILITY FOR ANYTHING DONE WITH/FROM THE SCRIPT 
+---
+
+## How it work's
+
+After you selected a song to play, the script give you 5 second to maximize RAFT.
+After the 5-second past, it emulates you pressing the right keys.
+
+Right now, there is no way to stop the script except for closing it.
+
 ## Notesheet's
 The script reads the Notsheet file and lets you play the songs that are in that file saved.
 
