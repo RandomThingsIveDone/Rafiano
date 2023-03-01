@@ -6,8 +6,8 @@
 
 ## How it work's
 
-After you selected a song to play, the script give you 5 second to maximize RAFT.
-After the 5-second past, it emulates you pressing the right keys.
+After you selected a song to play, the script gives you 5 seconds to maximize RAFT.
+After the 5-seconds pass, it emulates you pressing the right keys.
 
 Right now, there is no way to stop the script except for closing it.
 
