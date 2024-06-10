@@ -1,11 +1,23 @@
+L = """
+8888888b.            .d888 d8b
+888   Y88b          d88P"  Y8P
+888    888          888
+888   d88P  8888b.  888888 888  8888b.  88888b.   .d88b.
+8888888P"      "88b 888    888     "88b 888 "88b d88""88b
+888 T88b   .d888888 888    888 .d888888 888  888 888  888
+888  T88b  888  888 888    888 888  888 888  888 Y88..88P
+888   T88b "Y888888 888    888 "Y888888 888  888  "Y88P"
+"""
+
+
 import curses
-from typing import List, Dict, Union
 import re
 import time
 import os
-from pynput.keyboard import Key, Controller
 import configparser
 import shutil
+from pynput.keyboard import Key, Controller
+from typing import List, Dict, Union
 
 CONFIG_FILE_PATH = "config.ini"
 
@@ -223,13 +235,15 @@ def play_songs_menu(stdscr, notesheet_data):
             if current_option == len(song_options) - 1:  # Exit option selected
                 break
             else:
-                stdscr.addstr(10, 1,f"Playing : {notesheet_data[current_option]['name']} by: {notesheet_data[current_option]['creator']}")
+                stdscr.addstr(10, 1,
+                              f"Playing : {notesheet_data[current_option]['name']} by: {notesheet_data[current_option]['creator']}")
                 stdscr.refresh()
                 for i in range(5, 0, -1):
                     stdscr.addstr(11, 1, str(i))
                     stdscr.refresh()
                     time.sleep(1)
                 player(notesheet_data[current_option]["notes"])
+
 
 def remove_song_from_notesheet(notesheet_filepath: str, song_name: str):
     """
@@ -267,7 +281,6 @@ def remove_song_from_notesheet(notesheet_filepath: str, song_name: str):
         # Rewrite the notesheet file with the updated contents
         with open(notesheet_filepath, 'w', encoding='utf-8') as f:
             f.writelines(notesheet_contents)
-
 
 
 def combine_notesheets(master_filepath: str, secondary_filepath: str, output_filepath: str):
