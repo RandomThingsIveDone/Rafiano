@@ -1,4 +1,4 @@
-L = """
+"""
 8888888b.            .d888 d8b
 888   Y88b          d88P"  Y8P
 888    888          888
@@ -10,14 +10,16 @@ L = """
 """
 
 
-import curses
-import re
-import time
-import os
 import configparser
+import curses
+import os
+import re
 import shutil
-from pynput.keyboard import Key, Controller
-from typing import List, Dict, Union
+import time
+
+from pynput.keyboard import Controller, Key
+from typing import Dict, List
+from collections import defaultdict
 
 CONFIG_FILE_PATH = "config.ini"
 
@@ -75,47 +77,36 @@ def validate_notesheet(notesheet: str) -> bool:
     return True
 
 
-def parse_notesheet_file(filepath: str) -> List[
-    Dict[str, Union[str, List[Dict[str, Union[List[str], Key, float, float]]], List[int]]]]:
-    """
-    Parses a notesheet file and returns a list of dictionaries, where each dictionary represents a song with its name, creator, and notes.
 
-    Args:
-        filepath (str): The path to the notesheet file to be parsed.
+def parse_file(file_path: str) -> List[Dict]:
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            notesheet_data = f.read()
+    except:
+        return []
 
-    Returns:
-        list: A list of dictionaries, where each dictionary represents a song with its name, creator, notes, and line numbers.
-
-    Raises:
-        Exception: If the notesheet contains invalid modifier, release/press time values, or invalid characters.
-    """
-    with open(filepath, 'r', encoding='utf-8') as f:
-        notesheet_data = f.read()
-
-    # Initialize variables to store song information
+    all_songs = []
     read_notesheet = False
     current_song = {}
-    all_songs = []
     current_song_notes = []
     start_line = 0
 
     # Validate the notesheet before parsing
     if not validate_notesheet(notesheet_data):
-        raise Exception("Notesheet uses invalid characters")
+        print(f"Skipping invalid notesheet: {file_path}")
+        return []
 
     # Split the notesheet string into individual lines
     notesheet_lines = notesheet_data.split("\n")
 
     # Loop through each line of the notesheet
     for i, notesheet_line in enumerate(notesheet_lines):
-
         # Ignore comment lines and empty lines
         if notesheet_line == "" or notesheet_line.startswith("#"):
             continue
 
         # If a song header line is found, start a new song
         elif notesheet_line.startswith("|"):
-
             # If already read song information, append to list
             if read_notesheet:
                 current_song["notes"] = current_song_notes
@@ -125,13 +116,12 @@ def parse_notesheet_file(filepath: str) -> List[
             # Set variables for new song
             read_notesheet = True
             song_info = notesheet_line.split("|")
-            current_song = {"name": song_info[1], "creator": song_info[2]}
+            current_song = {"name": song_info[1], "creator": song_info[2], "version": song_info[3]}
             current_song_notes = []
             start_line = i
 
         # If reading notes, add note information to current song
         elif read_notesheet:
-
             # Parse note information
             split_notes = notesheet_line.split(" ")
             if split_notes[1].upper() == "":
@@ -164,19 +154,97 @@ def parse_notesheet_file(filepath: str) -> List[
 
     return all_songs
 
-
-def player(song_notes: Dict[str, Union[str, List[Dict[str, Union[List[str], Key, float, float]]]]]) -> bool:
+def parse_notesheet_file(filepath: str) -> List[Dict]:
     """
-    Plays the notes of a given song by simulating key presses.
+    Parses a notesheet file or files in a folder and returns a list of dictionaries, where each dictionary represents a song with its name, creator, and notes.
 
     Args:
-        song_notes (Dict[str, Union[str, List[Dict[str, Union[List[str], Key, float, float]]]]]): A dictionary containing information about the song to be played.
+        filepath (str): The path to the notesheet file or folder to be parsed.
+
+    Returns:
+        list: A list of dictionaries, where each dictionary represents a song with its name, creator, notes, and line numbers.
+
+    Raises:
+        Exception: If the notesheet contains invalid modifier, release/press time values, or invalid characters.
+    """
+    all_songs = []
+
+    if os.path.isdir(filepath):
+        for filename in os.listdir(filepath):
+            file_path = os.path.join(filepath, filename)
+            if os.path.isfile(file_path):
+                all_songs.extend(parse_file(file_path))
+    elif os.path.isfile(filepath):
+        all_songs.extend(parse_file(filepath))
+    else:
+        raise Exception("Provided path is neither a file nor a directory")
+
+    return all_songs
+
+
+from collections import defaultdict
+
+def Notesheet_easy_convert(data):
+    """
+    Process the input data to extract actions with their corresponding times,
+    combining actions for press and release times if applicable, and outputting
+    a list of lists where each sublist contains a time followed by the actions
+    performed at that time.
+
+    Args:
+    - data (list of dicts): A list of dictionaries where each dictionary contains
+      keys 'Note', 'press_time', and 'release_time'.
+
+    Returns:
+    - list of lists: A list where each sublist contains a time followed by the
+      actions performed at that time, sorted by time.
+    """
+
+    result = []
+
+    # Process each entry in the data
+    for entry in data:
+        press_time = entry["press_time"]
+        release_time = entry["release_time"]
+        notes = entry["notes"]
+
+        # Add notes with press time
+        for note in notes:
+            result.append((press_time, note))
+
+        # Add notes with release time if different from press time
+        if press_time != release_time:
+            for note in notes:
+                result.append((release_time, note))
+
+    # Sort the result based on time (first element of each tuple)
+    result.sort()
+
+    # Initialize output list
+    output_list = []
+
+    # Use defaultdict to collect notes by time
+    notes_by_time = defaultdict(list)
+
+    for time, note in result:
+        notes_by_time[time].append(note)
+
+    # Convert defaultdict to the final output format
+    output_list = [[time] + notes_by_time[time] for time in sorted(notes_by_time)]
+
+    return output_list
+
+
+
+def player_v1(song_notes: List[Dict]) -> bool:
+    """
+    Plays the notes of a given song by simulating key presses based on relative timings.
+
+    Args:
+        song_notes (List[Dict]): A list of dictionaries containing information about the song to be played.
 
     Returns:
         bool: True, if the song was played successfully.
-
-    Raises:
-        None: This function does not raise any exceptions.
     """
     # Create a keyboard controller object to simulate key presses
     keyboard = Controller()
@@ -201,6 +269,57 @@ def player(song_notes: Dict[str, Union[str, List[Dict[str, Union[List[str], Key,
     # Return True to indicate that the song was played successfully
     return True
 
+def player_v2(song_notes: List[Dict]) -> bool:
+    """
+    Plays the notes of a given song by simulating key presses based on absolute timings.
+
+    Args:
+        song_notes (List[Dict]): A list of dictionaries containing information about the song to be played.
+
+    Returns:
+        bool: True, if the song was played successfully.
+    """
+    keyboard = Controller()
+    PressRelease = {Key.shift: False, Key.space: False, "1": False, "2": False, "3": False,
+                    "4": False, "5": False, "6": False, "7": False, "8": False,
+                    "9": False, "0": False}
+
+    songNotes = Notesheet_easy_convert(song_notes)  # Assuming you have a function to convert song_notes
+
+    start_time = time.time()
+    for notes in songNotes:
+        while time.time() - start_time < notes[0]:
+            time.sleep(0.001)  # Adjust sleep time to avoid excessive CPU usage
+
+        for note in notes[1:]:
+            if PressRelease[note]:
+                keyboard.release(note)
+                PressRelease[note] = False
+            else:
+                keyboard.press(note)
+                PressRelease[note] = True
+
+
+    return True  # Return True if the song was played successfully
+
+def player(song_notes: List[Dict], version: str) -> bool:
+    """
+    Plays the notes of a given song by simulating key presses.
+
+    Args:
+        song_notes (List[Dict]): A list of dictionaries containing information about the song to be played.
+        version (str): The version of the player to use ("1.0" for relative timing, "2.0" for absolute timing).
+
+    Returns:
+        bool: True, if the song was played successfully.
+    """
+    if version == "1.0":
+        return player_v1(song_notes)
+    elif version == "2.0":
+        return player_v2(song_notes)
+    else:
+        raise ValueError("Unsupported version")
+
 
 def play_songs_menu(stdscr, notesheet_data):
     curses.curs_set(0)  # Hide the cursor
@@ -213,7 +332,7 @@ def play_songs_menu(stdscr, notesheet_data):
     while True:
         title: str = 'Rafiano | Song Selection | Use up and down arrows to navigate'
 
-        song_options = [x["name"] + " by " + x["creator"] for x in notesheet_data] + ["Go Back"]
+        song_options = [x["name"] + " by " + x["creator"]+ " " + x["version"] for x in notesheet_data] + ["Go Back"]
 
         stdscr.addstr(1, 1, title, curses.A_BOLD)
 
@@ -242,7 +361,7 @@ def play_songs_menu(stdscr, notesheet_data):
                     stdscr.addstr(11, 1, str(i))
                     stdscr.refresh()
                     time.sleep(1)
-                player(notesheet_data[current_option]["notes"])
+                player(notesheet_data[current_option]["notes"], notesheet_data[current_option]['version'])
 
 
 def remove_song_from_notesheet(notesheet_filepath: str, song_name: str):
@@ -407,7 +526,7 @@ def delete_song_menu(stdscr, notesheet_data, master_path):
     stdscr.clear()
     stdscr.addstr(1, 1, "Select song to delete:")
 
-    song_options = [song["name"] + " by " + song["creator"] for song in notesheet_data]
+    song_options = [song["name"] + " by " + song["creator"] + " " + song["version"] for song in notesheet_data]
     song_options.append("Go Back")  # Add "Go Back" option
     current_option = 0
 
