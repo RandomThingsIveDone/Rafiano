@@ -221,6 +221,7 @@ class NotesheetUtils:
                 if read_notesheet:
                     current_song["notes"] = current_song_notes
                     current_song["Lines"] = [start_line, i]
+                    current_song["file_path"] = file_path
                     all_songs.append(current_song)
                 read_notesheet = True
                 song_info = notesheet_line.split("|")
@@ -250,6 +251,7 @@ class NotesheetUtils:
         if read_notesheet:
             current_song["notes"] = current_song_notes
             current_song["Lines"] = [start_line, len(notesheet_lines)]
+            current_song["file_path"] = file_path
             all_songs.append(current_song)
 
         return all_songs
@@ -326,7 +328,7 @@ class NotesheetUtils:
 
         return output_list
 
-    def remove_song_from_notesheet(self, notesheet_filepath: str, song_name: str):
+    def remove_song_from_notesheet(self, notesheet_folder_path: str, song_name: str):
         """
         Removes a song from the notesheet by its name.
 
@@ -337,7 +339,7 @@ class NotesheetUtils:
         Returns:
             None
         """
-        notesheet_data = self.parse_notesheet_file(notesheet_filepath)
+        notesheet_data = self.parse_notesheet_file(notesheet_folder_path)
 
         start_line = None
         end_line = None
@@ -345,15 +347,16 @@ class NotesheetUtils:
         for song in notesheet_data:
             if song["name"] == song_name:
                 start_line, end_line = song["Lines"]
+                notesheet_path = song["file_path"]
                 break
 
         if start_line is not None and end_line is not None:
-            with open(notesheet_filepath, 'r', encoding='utf-8') as f:
+            with open(notesheet_path, 'r', encoding='utf-8') as f:
                 notesheet_contents = f.readlines()
 
             del notesheet_contents[start_line:end_line]
 
-            with open(notesheet_filepath, 'w', encoding='utf-8') as f:
+            with open(notesheet_path, 'w', encoding='utf-8') as f:
                 f.writelines(notesheet_contents)
 
     def combine_notesheets(self, master_filepath: str, secondary_filepath: str, output_filepath: str):
@@ -671,13 +674,13 @@ class MidiProcessor:
         """
         with open(f"{file_path}/{file_name.split('/')[-1]}.notesheet", "w+") as notesheet:
             notesheet.write(
+                f"|{file_name.split('/')[-1]}|RaftMIDI|1.0\n"
                 "###############################################################################\n"
                 "# Notesheet generated using code from https://github.com/PrzemekkkYT/RaftMIDI #\n"
-                "# Big Thanks to PrzemekkkYT for his work and help addapting his code to the   #\n"
+                "# Big Thanks to PrzemekkkYT for his work and help adapting his code to the    #\n"
                 "# Notesheet format.                                                           #\n"
                 "###############################################################################\n"
             )
-            notesheet.write(f"|{file_name.split('/')[-1]}|RaftMIDI|1.0\n")
 
             notes_per_start = {}
             for note in notes:
@@ -840,7 +843,7 @@ class MenuManager:
                 if i == current_option:
                     stdscr.addstr(i + 3, 1, menu_indicator + " " + option, curses.A_REVERSE)
                 else:
-                    stdscr.addstr(i + 3, 1, "   " + option)
+                    stdscr.addstr(i + 3, 1, "   " + option + " ")
 
             stdscr.refresh()
 
@@ -961,7 +964,7 @@ class MenuManager:
                     stdscr.clear()
 
     def _edit_notesheet_menu(self, stdscr):
-        options = ["Combine Notesheets", "Remove Song", "Export Notesheet", "Add MIDI File", "Go Back"]
+        options = ["Combine Notesheets", "Remove Song", "One File Notesheet export", "Add MIDI File", "Go Back"]
         current_option = 0
         config = Utils().load_config()  # Load the configuration
         folder_path = config.get('DEFAULT', 'notesheet_path')  # Get the notesheet path from the configuration
@@ -989,27 +992,14 @@ class MenuManager:
                     self._combine_notesheets_menu(stdscr, folder_path)
 
                 elif current_option == 1:
-                    # TODO repair because config path system got changed and now compatible with multiple Notesheets
+                    # TODO: remove Notesheet works now but its not pretty yet rework shoudld be done
                     # Remove Song
-                    notesheet_data = NotesheetUtils().parse_notesheet_file(master_path)
-                    self._delete_song_menu(stdscr, notesheet_data, master_path)
+                    notesheet_data = NotesheetUtils().parse_notesheet_file(folder_path)
+                    self._delete_song_menu(stdscr, notesheet_data, folder_path)
                 elif current_option == 2:
-                    # TODO repair because config path system got changed
-                    # Export Notesheet
-                    stdscr.addstr(len(options) + 3, 1, "Enter output path for the exported notesheet:")
-                    stdscr.refresh()
-                    curses.echo()  # Enable text input
-                    output_path = stdscr.getstr(len(options) + 4, 1).decode(encoding="utf-8")
-                    curses.noecho()  # Disable text input
-                    try:
-                        shutil.copyfile(master_path, output_path)
-                        stdscr.addstr(len(options) + 5, 1, "Notesheet exported successfully!")
-                        stdscr.refresh()
-                        stdscr.getch()  # Wait for user input to continue
-                    except Exception as e:
-                        stdscr.addstr(len(options) + 5, 1, f"Error exporting notesheet: {str(e)}")
-                        stdscr.refresh()
-                        stdscr.getch()  # Wait for user input to continue
+
+                    self._export_notesheet_menu(stdscr, folder_path)
+
                 elif current_option == 3:
                     # Add MIDI File
                     notesheet_path = config.get('DEFAULT', 'notesheet_path')
@@ -1017,6 +1007,51 @@ class MenuManager:
                 elif current_option == 4:
                     # Go Back
                     return
+
+    @staticmethod
+    def _export_notesheet_menu(stdscr, folder_path):
+        # Export Notesheet
+        stdscr.clear()
+        stdscr.addstr(3, 1, "Enter output path for the exported notesheet:")
+        stdscr.refresh()
+
+        curses.echo()  # Enable text input
+        output_path = f"{stdscr.getstr(4, 1).decode(encoding="utf-8").strip()}.notesheet"
+        curses.noecho()  # Disable text input
+
+        if not output_path:
+            stdscr.addstr(5, 1, "Invalid output path. Please provide a valid path.")
+            stdscr.refresh()
+            stdscr.getch()  # Wait for user input to continue
+            return
+
+        notesheets = NotesheetUtils().list_notesheets(folder_path)
+
+        #code to check if the ourput already exist if yes error lese create
+        if os.path.exists(output_path):
+            stdscr.addstr(5, 1, f"Notesheet already exists at {output_path}")
+            stdscr.refresh()
+            stdscr.getch()  # Wait for user input to continue
+            return
+        else:
+            open(output_path, 'w').write("|If you are reading this|please contact us...|1.0")
+
+        for notesheet in notesheets:
+            try:
+                NotesheetUtils().combine_notesheets(output_path, f"{folder_path}/{notesheet}", output_path)
+            except Exception as e:
+                stdscr.addstr(5, 1, f"Error exporting notesheet: {str(e)}")
+                stdscr.refresh()
+                stdscr.getch()  # Wait for user input to continue#
+
+        with open(output_path, 'r') as f:
+            lines = f.readlines()
+        with open(output_path, 'w') as f:
+            f.writelines(lines[1:])
+
+        stdscr.addstr(5, 1, f"Notesheet exported successfully to {output_path}")
+        stdscr.refresh()
+        stdscr.getch()  # Wait for user input to continue
 
     @staticmethod
     def _midi_conversion_menu(stdscr, notesheet_path):
@@ -1147,8 +1182,7 @@ class MenuManager:
             stdscr.clear()  # Clear the screen after user input
 
     @staticmethod
-    #TODO repair because config path system got changed
-    def _delete_song_menu(stdscr, notesheet_data, master_path):
+    def _delete_song_menu(stdscr, notesheet_data, folder_path):
         curses.curs_set(0)  # Hide the cursor
         stdscr.clear()
         stdscr.addstr(1, 1, "Select song to delete:")
@@ -1187,7 +1221,7 @@ class MenuManager:
 
                     if confirmation.strip() == "Yes!":
                         song_name = notesheet_data[current_option]["name"]
-                        NotesheetUtils().remove_song_from_notesheet(master_path, song_name)
+                        NotesheetUtils().remove_song_from_notesheet(folder_path, song_name)
                         stdscr.addstr(len(song_options) + 5, 1, f"Song '{song_name}' deleted successfully!")
                         stdscr.refresh()
                         stdscr.getch()  # Wait for user input to continue
