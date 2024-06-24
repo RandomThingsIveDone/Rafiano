@@ -26,6 +26,8 @@ try:
     from py_midicsv import midi_to_csv
 
     from py_midicsv.midi.fileio import ValidationError
+
+
 except ImportError as e:
 
     module_name = str(e).split("'")[-2]
