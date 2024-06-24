@@ -61,6 +61,27 @@ Rafiano brings creativity and enjoyment to **RAFT**.
      ```
    - Follow the console instructions to select a song from your Notesheet file.
 
+### Compiling the .exe with PyInstaller
+
+1. **Install PyInstaller:**
+   Ensure you have PyInstaller installed. You can install it via pip if you haven't already:
+   ```
+   pip install pyinstaller
+   ```
+
+2. **Download:**
+   - Clone or download the Rafiano repository from [GitHub](https://github.com/RandomThingsIveDone/Rafiano).
+  
+3. **Setup:**
+   - Navigate to the Rafiano directory.
+
+4. **Run:**
+   - Open a terminal or command prompt.
+   - Navigate to the Rafiano directory.
+   - Run the script using Python:
+     ```
+     pyinstaller -F --icon=ico/Rafiano-Circle.ico Rafiano.py
+     ```
 ---
 
 ## Notesheets
