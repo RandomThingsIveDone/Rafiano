@@ -37,6 +37,7 @@ Rafiano brings creativity and enjoyment to **RAFT**.
    - Double-click `rafiano.exe` to start the application.
    - Follow the on-screen instructions to select a song from your Notesheet file.
 
+- - -
 ### Using the Python Script 
 
 1. **Prerequisites:**
@@ -60,7 +61,7 @@ Rafiano brings creativity and enjoyment to **RAFT**.
      python rafiano.py
      ```
    - Follow the console instructions to select a song from your Notesheet file.
-
+- - -
 ### Compiling the .exe with PyInstaller
 
 1. **Install PyInstaller:**
@@ -82,7 +83,8 @@ Rafiano brings creativity and enjoyment to **RAFT**.
      ```
      pyinstaller -F --icon=ico/Rafiano-Circle.ico Rafiano.py
      ```
----
+
+
 
 ## Notesheets
 
