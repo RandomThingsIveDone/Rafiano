@@ -13,7 +13,7 @@
 
 
 <div style="display: flex; align-items: center;">
-  <img src="https://raw.githubusercontent.com/RandomThingsIveDone/Rafiano/main/Rafiano-Circle.png" align="right"
+  <img src="https://raw.githubusercontent.com/RandomThingsIveDone/Rafiano/main/ico/Rafiano-Circle.png" align="right"
      alt="Rafiano" width="200" height="200">
   
 <br><br>**Rafiano** enhances the piano experience in the game RAFT,<br>
@@ -43,7 +43,7 @@ Rafiano brings creativity and enjoyment to **RAFT**.
    - Ensure Python 3.x is installed on your system.
    - Install dependencies by running:
      ```
-     pip install pynput
+     pip install pynput py_midicsv
      ```
 
 2. **Download:**
