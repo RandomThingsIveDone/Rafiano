@@ -12,11 +12,13 @@
 import configparser
 import curses
 import os
-import re
 import shutil
+import re
 import time
 import random
 import sys
+import subprocess
+import ctypes
 
 from typing import Dict, List
 from collections import defaultdict
@@ -71,8 +73,7 @@ class Utils:
     def __init__(self):
         pass
 
-    @staticmethod
-    def create_default_config(reset_config=False):
+    def create_default_config(self, reset_config=False):
         """
         Creates or resets a default configuration file with default values.
         Also ensures that the folder specified in 'notesheet_path' and the file 'master_notesheet' exist.
@@ -89,7 +90,13 @@ class Utils:
             config.read(CONFIG_FILE_PATH)
         else:
             # Default configuration values
-            config['DEFAULT'] = {'notesheet_path': 'Notesheets', 'master_notesheet': 'Master.notesheet'}
+
+            config['DEFAULT'] = {'notesheet_path': 'Notesheets',
+                                 'master_notesheet': 'Master.notesheet',
+                                 'username': 'Anonymous'}
+
+            config['DO-NOT-EDIT'] = {'install_type': f'{self.get_install_type()}',
+                                     'first_run': True}
 
             # Write configuration to file
             with open(CONFIG_FILE_PATH, 'w') as configfile:
@@ -154,6 +161,63 @@ class Utils:
             ),
             None,
         )
+
+    @staticmethod
+    def is_pyinstaller_exe():
+        try:
+            frozen = getattr(sys, 'frozen', False)
+            if frozen:
+                # Running in a PyInstaller bundle
+                return True
+            else:
+                return False
+        except Exception:
+            return False
+
+    @staticmethod
+    def find_all_programs_folder():
+        try:
+            # This is the default path for All Users Start Menu in English Windows versions
+            start_menu_path = os.path.join(os.environ['ProgramData'], 'Microsoft', 'Windows', 'Start Menu', 'Programs')
+            if os.path.exists(start_menu_path):
+                return start_menu_path
+            else:
+                return None
+        except Exception as e:
+            print(f"Error: {e}")
+            return None
+
+    @staticmethod
+    def get_exe_path():
+        if getattr(sys, 'frozen', False):
+            # When running in a PyInstaller bundle
+            return sys.executable
+        else:
+            # When running in a normal Python environment
+            return os.path.abspath(__file__)
+
+    def get_install_type(self):
+        # Check if running as a PyInstaller bundle
+        if getattr(sys, 'frozen', False):
+            exe_path = self.get_exe_path()
+            all_programs_path = self.find_all_programs_folder()
+            if exe_path and all_programs_path and all_programs_path in exe_path:
+                return "installed exe"
+            else:
+                return "exe"
+        else:
+            return "script"
+    @staticmethod
+    def is_admin():
+        try:
+            return ctypes.windll.shell32.IsUserAnAdmin()
+        except:
+            return False
+
+    @staticmethod
+    def run_as_admin():
+        if os.name == 'nt':
+            ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
 
 
 class NotesheetUtils:
@@ -1385,10 +1449,134 @@ class MenuManager:
 
         curses.endwin()
 
+    def _perform_installation(self, stdscr):
+        stdscr.addstr(5, 1, "Installing...", curses.A_BOLD)
+        stdscr.refresh()
+
+        try:
+            # Get user's programs directory
+            programs_folder = Utils.find_all_programs_folder()
+
+            # Check if Rafiano folder already exists in programs directory
+            rafiano_folder = os.path.join(programs_folder, "Rafiano")
+            if os.path.exists(rafiano_folder):
+                stdscr.addstr(6, 1, "Rafiano is already installed!", curses.color_pair(1))
+                stdscr.refresh()
+                curses.napms(2000)  # Delay to show message
+                return
+
+            # Ensure the script is running with administrative privileges
+            if not Utils.is_admin():
+                stdscr.addstr(6, 1, "Restarting with administrative privileges...", curses.color_pair(1))
+                stdscr.refresh()
+                curses.napms(2000)  # Delay to show message
+                Utils.run_as_admin()
+                sys.exit()
+
+            # Create Rafiano folder in programs directory
+            os.makedirs(rafiano_folder, exist_ok=True)
+
+            # Get the path to the current executable or script
+            current_path = Utils.get_exe_path()
+
+            # Copy config.ini to Rafiano folder
+            shutil.copy("config.ini", rafiano_folder)
+
+            # Copy current executable or script to Rafiano folder
+            shutil.copy(current_path, os.path.join(rafiano_folder, os.path.basename(current_path)))
+
+            # Copy Notesheets folder to Rafiano folder
+            shutil.copytree("Notesheets", os.path.join(rafiano_folder, "Notesheets"))
+
+            # Delete original config.ini and Notesheets folder
+            os.remove("config.ini")
+            shutil.rmtree("Notesheets")
+
+            stdscr.addstr(7, 1, "Installation completed successfully!", curses.A_BOLD)
+            stdscr.refresh()
+            curses.napms(2000)  # Delay to show completion message
+
+            # Launch the newly installed executable or script
+            installed_exe_path = os.path.join(rafiano_folder, os.path.basename(current_path))
+            subprocess.Popen([installed_exe_path])
+
+            # Close the current instance of the application
+            sys.exit()
+
+        except PermissionError:
+            stdscr.addstr(7, 1, "Permission denied! Please run as administrator.", curses.color_pair(1))
+            stdscr.refresh()
+            curses.napms(2000)  # Delay to show failure message
+        except Exception as e:
+            stdscr.addstr(7, 1, f"Installation failed: {str(e)}", curses.color_pair(1))
+            stdscr.refresh()
+            curses.napms(2000)  # Delay to show failure message
+
+    def _ask_to_install_menu(self, stdscr):
+        stdscr.clear()
+        stdscr.refresh()
+
+        # Load configuration
+        config = Utils().load_config()
+
+        # Check if Rafiano is already installed
+        programs_folder = Utils.find_all_programs_folder()
+        rafiano_folder = os.path.join(programs_folder, "Rafiano")
+        if os.path.exists(rafiano_folder):
+            stdscr.addstr(6, 1, "Rafiano is already installed! You should use the installed version instead.\n Yous search for Rafiano in the searchbar", curses.color_pair(1))
+            stdscr.refresh()
+            curses.napms(2000)  # Delay to show message
+            return
+
+        # Define menu options
+        options = ["Yes", "No, ask me later", "No, don't ask me again"]
+        current_option = 0
+
+        while True:
+            stdscr.clear()
+            stdscr.addstr(1, 1, "Welcome! Would you like to install the application?", curses.A_BOLD)
+            for i, option in enumerate(options):
+                if i == current_option:
+                    stdscr.addstr(3 + i, 1, f"{option}", curses.A_REVERSE)
+                else:
+                    stdscr.addstr(3 + i, 1, f"{option}")
+
+            stdscr.refresh()
+
+            key = stdscr.getch()
+
+            if key == curses.KEY_UP:
+                current_option = (current_option - 1) % len(options)
+            elif key == curses.KEY_DOWN:
+                current_option = (current_option + 1) % len(options)
+            elif key == curses.KEY_ENTER or key in [10, 13]:
+                if current_option == 0:
+                    # Handle "Yes" option - install the application
+                    self._perform_installation(stdscr)
+                    break
+                elif current_option == 1:
+                    # Handle "No, ask me later" option
+                    break
+                elif current_option == 2:
+                    # Handle "No, don't ask me again" option
+                    config.set('DO-NOT-EDIT', 'first_run', 'False')
+                    with open(CONFIG_FILE_PATH, 'w') as configfile:
+                        config.write(configfile)
+                    break
+
     def _main_menu(self, stdscr):
         curses.curs_set(0)  # Hide the cursor
         stdscr.clear()
         stdscr.refresh()
+
+        config = Utils().load_config()
+        if config.getboolean('DO-NOT-EDIT', 'first_run', fallback=False) and config.get('DO-NOT-EDIT', 'install_type') == "exe":
+            self._ask_to_install_menu(stdscr)
+        else:
+            config.set('DO-NOT-EDIT', 'first_run', 'False')
+            with open(CONFIG_FILE_PATH, 'w') as configfile:
+                config.write(configfile)
+
 
         options = ["Play Music", "Edit Notesheet", "Settings", "Credits", "Exit"]
         current_option = 0
@@ -1437,6 +1625,7 @@ class MenuManager:
 
         while True:
             stdscr.clear()
+            stdscr.addstr(5, 30, f'program path: "{Utils().get_exe_path()}"')
             for i, option in enumerate(options):
                 if i == current_option:
                     stdscr.addstr(i + 1, 1, option, curses.A_REVERSE)
@@ -1466,28 +1655,32 @@ class MenuManager:
             elif key == curses.KEY_ENTER or key in [10, 13]:
                 if current_option == 0:
                     # Change Notesheet Path
-                    stdscr.addstr(3, 1, "Enter new notesheet path:")
+                    stdscr.addstr(7, 1, "Enter new notesheet path:")
                     stdscr.refresh()
+                    curses.curs_set(1)
                     curses.echo()  # Enable text input
-                    new_path = stdscr.getstr(4, 1).decode(encoding="utf-8")
+                    new_path = stdscr.getstr(8, 1).decode(encoding="utf-8")
                     curses.noecho()  # Disable text input
                     config.set('DEFAULT', 'notesheet_path', new_path)
                     with open(CONFIG_FILE_PATH, 'w') as configfile:
                         config.write(configfile)
-                    stdscr.addstr(5, 1, "Notesheet path changed!")
+                    stdscr.addstr(7, 1, "Notesheet path changed!")
+                    curses.curs_set(0)
                     stdscr.refresh()
                     stdscr.getch()  # Wait for user input to continue
                 elif current_option == 1:
                     # Change Notesheet Path
-                    stdscr.addstr(3, 1, "Enter new notesheet master path:")
+                    stdscr.addstr(7, 1, "Enter new notesheet master path:")
+                    curses.curs_set(1)
                     stdscr.refresh()
                     curses.echo()  # Enable text input
-                    new_path = stdscr.getstr(4, 1).decode(encoding="utf-8")
+                    new_path = stdscr.getstr(8, 1).decode(encoding="utf-8")
                     curses.noecho()  # Disable text input
                     config.set('DEFAULT', 'master_notesheet', new_path)
                     with open(CONFIG_FILE_PATH, 'w') as configfile:
                         config.write(configfile)
-                    stdscr.addstr(5, 1, "Notesheet master path changed!")
+                    stdscr.addstr(7, 1, "Notesheet master path changed!")
+                    curses.curs_set(0)
                     stdscr.refresh()
                     stdscr.getch()  # Wait for user input to continue
                 elif current_option == 2:
@@ -1515,7 +1708,7 @@ class MenuManager:
 
 
 def main():
-    Utils.create_default_config()
+    Utils().create_default_config()
     menu_manager = MenuManager()
     menu_manager.start()
 
