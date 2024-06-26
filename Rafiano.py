@@ -17,7 +17,6 @@ import re
 import time
 import random
 import sys
-import subprocess
 import ctypes
 
 from typing import Dict, List
@@ -40,14 +39,13 @@ def handle_import_error(module_name, is_critical, message, continuation_message=
     - If a continuation_message is provided, prints it and waits for user input to continue.
     - If is_critical is True, exits the program after displaying the message.
     """
-    print("\n" + "#" * 60)
     print(message)
     print("\nPlease install it by running the following command:")
     print(f"    pip install {module_name}")
     print(
         "\nIf you are using the executable version of this program and this ERROR occurs, open a GitHub issue with details.")
     print("GitHub: https://github.com/RandomThingsIveDone/Rafiano/issues")
-    print("#" * 60 + "\n")
+    print("\n"+ "#" * 60 + "\n")
     if continuation_message:
         print(continuation_message)
         print("#" * 60 + "\n")
@@ -61,6 +59,7 @@ try:
     from py_midicsv import midi_to_csv
     from py_midicsv.midi.fileio import ValidationError
     import winshell
+    import pywin32
 except ImportError as e:
     module_name = str(e).split("'")[-2]
 
@@ -68,7 +67,7 @@ except ImportError as e:
         'py_midicsv': {
             'is_critical': False,
             'message': "WARNING: Unable to import 'py_midicsv' module.\nThis module is required for MIDI conversion functionality.",
-            'continuation_message': "You can continue to use the program, but MIDI conversion will not be available.\nBig Thanks to Przemekkk for the MIDI conversion code, don't forget to look at his repo:\n    https://github.com/PrzemekkkYT/RaftMIDI"
+            'continuation_message': "You can continue to use the program, but MIDI conversion will not be available.\nBig Thanks to Przemekkk for the MIDI conversion code, don't forget to look at his repo:\n    https://github.com/PrzemekkkYT/RaftMIDI \n"
         },
         'pynput': {
             'is_critical': True,
@@ -77,6 +76,11 @@ except ImportError as e:
         'winshell': {
             'is_critical': False,
             'message': "WARNING: Unable to import 'winshell' module.\nThis module is required for the installation and creating shortcuts.",
+            'continuation_message': "You can continue to use the program, but the installation will not work."
+        },
+        'pywin32': {
+            'is_critical': False,
+            'message': "WARNING: Unable to import 'pywin32' module which is needed for winshell.\nThis module is required for the installation and creating shortcuts.",
             'continuation_message': "You can continue to use the program, but the installation will not work."
         }
     }
@@ -453,7 +457,7 @@ class NotesheetUtils:
         Removes a song from the notesheet by its name.
 
         Args:
-            notesheet_filepath (str): The file path to the notesheet.
+            notesheet_folder_path (str): The file path to the notesheet.
             song_name (str): The name of the song to be removed.
 
         Returns:
@@ -463,6 +467,7 @@ class NotesheetUtils:
 
         start_line = None
         end_line = None
+        notesheet_path = ""
 
         for song in notesheet_data:
             if song["name"] == song_name:
@@ -1509,7 +1514,6 @@ class MenuManager:
 
     # TODO: Add a way to uninstall Rafiano
     # TODO: Add a way to import a notesheet
-    # TODO: Add a way to change the Username
 
     @staticmethod
     def _perform_installation(stdscr):
