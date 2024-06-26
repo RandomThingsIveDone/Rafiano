@@ -164,6 +164,14 @@ In `config.ini`, you can configure settings such as:
 
 Contributions and feedback are welcome! If you have any improvements or suggestions, feel free to open an issue or a pull request on [GitHub](https://github.com/RandomThingsIveDone/Rafiano).
 
+
+```python
+Credits
+
+RandomThingsIveDone: Menu Coding and Notesheet format         https://github.com/RandomThingsIveDone/Rafiano
+PrzemekkkYT: MIDI conversion code and song added              https://github.com/PrzemekkkYT/RaftMIDI
+STALKER666YT: added new songs                                 https://github.com/STALKER666YT/Rafiano-UPDATED-
+```
 ---
 
 By using Rafiano, you can easily play your favorite songs on RAFT with a simple Notesheet file. Happy playing!
