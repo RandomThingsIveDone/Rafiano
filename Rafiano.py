@@ -23,44 +23,72 @@ import ctypes
 from typing import Dict, List
 from collections import defaultdict
 
+
+def handle_import_error(module_name, is_critical, message, continuation_message=None):
+    """
+    Handles the ImportError for a specified module by printing an appropriate message,
+    suggesting installation commands, and optionally exiting the program.
+
+    Parameters:
+    module_name (str): The name of the module that failed to import.
+    is_critical (bool): Whether the missing module is critical for the program's execution.
+    message (str): The main error message to display.
+    continuation_message (str, optional): An additional message to display if the program can continue without the module.
+
+    Behavior:
+    - Prints a formatted error message with installation instructions.
+    - If a continuation_message is provided, prints it and waits for user input to continue.
+    - If is_critical is True, exits the program after displaying the message.
+    """
+    print("\n" + "#" * 60)
+    print(message)
+    print("\nPlease install it by running the following command:")
+    print(f"    pip install {module_name}")
+    print(
+        "\nIf you are using the executable version of this program and this ERROR occurs, open a GitHub issue with details.")
+    print("GitHub: https://github.com/RandomThingsIveDone/Rafiano/issues")
+    print("#" * 60 + "\n")
+    if continuation_message:
+        print(continuation_message)
+        print("#" * 60 + "\n")
+    input("Press Enter to continue...")
+    if is_critical:
+        exit(1)
+
+
 try:
     from pynput.keyboard import Controller, Key
     from py_midicsv import midi_to_csv
-
     from py_midicsv.midi.fileio import ValidationError
-
-
+    import winshell
 except ImportError as e:
-
     module_name = str(e).split("'")[-2]
-    if module_name in ['py_midicsv', 'py_midicsv.midi.fileio']:
-        print("\n" + "#" * 60)
-        print("WARNING: Unable to import 'py_midicsv' module.")
-        print("This module is required for MIDI conversion functionality.")
-        print("\nPlease install it by running the following command:")
-        print("    pip install py_midicsv")
-        print(
-            "\nIf you are using the executable version of this program and this ERROR ocurs, open a GitHub issue with details.")
-        print("GitHub: https://github.com/RandomThingsIveDone/Rafiano/issues")
-        print("\nYou can continue to use the program, but MIDI conversion will not be available.")
-        print("#" * 60 + "\n")
-        print(
-            "Big Thanks to Przemekkk for the MIDI conversion code, dont forget to look at his repo:\n    https://github.com/PrzemekkkYT/RaftMIDI \n")
-        print("#" * 60 + "\n")
-        input("Press Enter to continue...")
 
-    elif module_name == 'pynput':
-        print("\n" + "#" * 60)
-        print("CRITICAL ERROR: Unable to import 'pynput' module.")
-        print("This module is essential for the program to run.")
-        print("\nPlease install it by running the following command:")
-        print("    pip install pynput")
-        print(
-            "\nIf you are using the executable version of this program and this ERROR ocurs, open a GitHub issue with details.")
-        print("GitHub: https://github.com/RandomThingsIveDone/Rafiano/issues")
-        print("#" * 60 + "\n")
-        input("Press Enter to continue...")
-        exit(1)
+    error_messages = {
+        'py_midicsv': {
+            'is_critical': False,
+            'message': "WARNING: Unable to import 'py_midicsv' module.\nThis module is required for MIDI conversion functionality.",
+            'continuation_message': "You can continue to use the program, but MIDI conversion will not be available.\nBig Thanks to Przemekkk for the MIDI conversion code, don't forget to look at his repo:\n    https://github.com/PrzemekkkYT/RaftMIDI"
+        },
+        'pynput': {
+            'is_critical': True,
+            'message': "CRITICAL ERROR: Unable to import 'pynput' module.\nThis module is essential for the program to run."
+        },
+        'winshell': {
+            'is_critical': False,
+            'message': "WARNING: Unable to import 'winshell' module.\nThis module is required for the installation and creating shortcuts.",
+            'continuation_message': "You can continue to use the program, but the installation will not work."
+        }
+    }
+
+    if module_name in error_messages:
+        error_info = error_messages[module_name]
+        handle_import_error(
+            module_name,
+            error_info['is_critical'],
+            error_info['message'],
+            error_info.get('continuation_message')
+        )
 
 CONFIG_FILE_PATH = "config.ini"
 
@@ -103,8 +131,8 @@ class Utils:
                 config.write(configfile)
 
         # Read configuration values
-        notesheet_path = config.get('DEFAULT', 'notesheet_path')
-        master_notesheet = config.get('DEFAULT', 'master_notesheet')
+        notesheet_path = Utils().adjust_path(config.get('DEFAULT', 'notesheet_path'))
+        master_notesheet = Utils().adjust_path(config.get('DEFAULT', 'master_notesheet'))
 
         # Ensure 'Notesheets' folder exists as per config
         if not os.path.exists(notesheet_path):
@@ -207,6 +235,7 @@ class Utils:
                 return "exe"
         else:
             return "script"
+
     @staticmethod
     def is_admin():
         try:
@@ -218,6 +247,33 @@ class Utils:
     def run_as_admin():
         if os.name == 'nt':
             ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
+
+    def adjust_path(self, input_path):
+        # TODO: impelment a way to when a relative path is in the config file it gets tracerd to the exe not where it started
+        return input_path
+
+
+    def create_programs_shortcut(self,rafiano_folder):
+        # Create a shortcut in the Programs directory
+        program_shortcut = os.path.join(self.find_all_programs_folder(), "Rafiano.lnk")
+        target = os.path.join(rafiano_folder, "Rafiano.exe")
+        icon = (target, 0)
+        shortcut = winshell.shortcut(program_shortcut)
+        shortcut.path = target
+        shortcut.icon = icon
+        shortcut.write()
+
+    @staticmethod
+    def create_desktop_shortcut(rafiano_folder):
+        # Create a shortcut on the desktop
+        desktop_shortcut = os.path.join(winshell.desktop(), "Rafiano.lnk")
+        target = os.path.join(rafiano_folder, "Rafiano.exe")
+        icon = (target, 0)
+        shortcut = winshell.shortcut(desktop_shortcut)
+        shortcut.path = target
+        shortcut.icon = icon
+        shortcut.write()
+
 
 
 class NotesheetUtils:
@@ -1031,8 +1087,7 @@ class MenuManager:
         options = ["Combine Notesheets", "Remove Song", "One File Notesheet export", "Add MIDI File", "Go Back"]
         current_option = 0
         config = Utils().load_config()  # Load the configuration
-        folder_path = config.get('DEFAULT', 'notesheet_path')  # Get the notesheet path from the configuration
-        master_path = config.get('DEFAULT', 'master_notesheet')  # Get the notesheet path from the configuration
+        folder_path = Utils().adjust_path(config.get('DEFAULT', 'notesheet_path'))  # Get the notesheet path from the configuration
 
         while True:
             stdscr.clear()
@@ -1066,7 +1121,7 @@ class MenuManager:
 
                 elif current_option == 3:
                     # Add MIDI File
-                    notesheet_path = config.get('DEFAULT', 'notesheet_path')
+                    notesheet_path = Utils().adjust_path(config.get('DEFAULT', 'notesheet_path'))
                     self._midi_conversion_menu(stdscr, notesheet_path)
                 elif current_option == 4:
                     # Go Back
@@ -1449,7 +1504,10 @@ class MenuManager:
 
         curses.endwin()
 
-    def _perform_installation(self, stdscr):
+    # TODO: Add a way to uninstall Rafiano
+
+    @staticmethod
+    def _perform_installation(stdscr):
         stdscr.addstr(5, 1, "Installing...", curses.A_BOLD)
         stdscr.refresh()
 
@@ -1459,17 +1517,14 @@ class MenuManager:
 
             # Check if Rafiano folder already exists in programs directory
             rafiano_folder = os.path.join(programs_folder, "Rafiano")
-            if os.path.exists(rafiano_folder):
-                stdscr.addstr(6, 1, "Rafiano is already installed!", curses.color_pair(1))
-                stdscr.refresh()
-                curses.napms(2000)  # Delay to show message
-                return
 
             # Ensure the script is running with administrative privileges
             if not Utils.is_admin():
                 stdscr.addstr(6, 1, "Restarting with administrative privileges...", curses.color_pair(1))
                 stdscr.refresh()
                 curses.napms(2000)  # Delay to show message
+
+                sys.argv.append("--only-install")
                 Utils.run_as_admin()
                 sys.exit()
 
@@ -1478,6 +1533,10 @@ class MenuManager:
 
             # Get the path to the current executable or script
             current_path = Utils.get_exe_path()
+
+            # Verify the current path is a valid executable
+            if not current_path.endswith('.exe'):
+                raise ValueError(f"The file {current_path} is not a valid executable")
 
             # Copy config.ini to Rafiano folder
             shutil.copy("config.ini", rafiano_folder)
@@ -1488,29 +1547,35 @@ class MenuManager:
             # Copy Notesheets folder to Rafiano folder
             shutil.copytree("Notesheets", os.path.join(rafiano_folder, "Notesheets"))
 
+            # Create shortcuts
+            Utils().create_programs_shortcut(rafiano_folder)
+            Utils().create_desktop_shortcut(rafiano_folder)
+
             # Delete original config.ini and Notesheets folder
             os.remove("config.ini")
             shutil.rmtree("Notesheets")
 
-            stdscr.addstr(7, 1, "Installation completed successfully!", curses.A_BOLD)
+            stdscr.addstr(6, 1, "Installation completed successfully! \n search for Rafiano in the searchbar or use the desktop shortcut. \n Press any key to close the window.", curses.A_BOLD)
             stdscr.refresh()
-            curses.napms(2000)  # Delay to show completion message
+            stdscr.getch()
 
-            # Launch the newly installed executable or script
-            installed_exe_path = os.path.join(rafiano_folder, os.path.basename(current_path))
-            subprocess.Popen([installed_exe_path])
+
 
             # Close the current instance of the application
             sys.exit()
 
         except PermissionError:
-            stdscr.addstr(7, 1, "Permission denied! Please run as administrator.", curses.color_pair(1))
+            stdscr.addstr(7, 1, "Permission denied! Please run as administrator. Press any key to continue", curses.color_pair(1))
             stdscr.refresh()
-            curses.napms(2000)  # Delay to show failure message
+            stdscr.getch()
+        except ValueError as e:
+            stdscr.addstr(7, 1, f"Installation failed: {str(e)}. Press any key to continue", curses.color_pair(1))
+            stdscr.refresh()
+            stdscr.getch()
         except Exception as e:
-            stdscr.addstr(7, 1, f"Installation failed: {str(e)}", curses.color_pair(1))
+            stdscr.addstr(7, 1, f"Installation failed: {str(e)}. Press any key to continue", curses.color_pair(1))
             stdscr.refresh()
-            curses.napms(2000)  # Delay to show failure message
+            stdscr.getch()
 
     def _ask_to_install_menu(self, stdscr):
         stdscr.clear()
@@ -1519,13 +1584,19 @@ class MenuManager:
         # Load configuration
         config = Utils().load_config()
 
+        if "--only-install" in sys.argv:
+            self._perform_installation(stdscr)
+            return
+
         # Check if Rafiano is already installed
         programs_folder = Utils.find_all_programs_folder()
         rafiano_folder = os.path.join(programs_folder, "Rafiano")
         if os.path.exists(rafiano_folder):
-            stdscr.addstr(6, 1, "Rafiano is already installed! You should use the installed version instead.\n Yous search for Rafiano in the searchbar", curses.color_pair(1))
+            stdscr.addstr(6, 1,
+                          "Rafiano is already installed! You should use the installed version instead. \n search for Rafiano in the searchbar. ",
+                          curses.color_pair(1))
             stdscr.refresh()
-            curses.napms(2000)  # Delay to show message
+            stdscr.getch()
             return
 
         # Define menu options
@@ -1534,7 +1605,7 @@ class MenuManager:
 
         while True:
             stdscr.clear()
-            stdscr.addstr(1, 1, "Welcome! Would you like to install the application?", curses.A_BOLD)
+            stdscr.addstr(1, 1, f"Welcome! Would you like to install the application? {sys.argv}", curses.A_BOLD)
             for i, option in enumerate(options):
                 if i == current_option:
                     stdscr.addstr(3 + i, 1, f"{option}", curses.A_REVERSE)
@@ -1570,13 +1641,18 @@ class MenuManager:
         stdscr.refresh()
 
         config = Utils().load_config()
-        if config.getboolean('DO-NOT-EDIT', 'first_run', fallback=False) and config.get('DO-NOT-EDIT', 'install_type') == "exe":
+        if Utils().get_exe_path() == os.path.join(Utils().find_all_programs_folder(), "Rafiano.exe"):
+            config.set('DO-NOT-EDIT', 'first_run', 'False')
+            with open(CONFIG_FILE_PATH, 'w') as configfile:
+                config.write(configfile)
+
+        elif config.getboolean('DO-NOT-EDIT', 'first_run', fallback=False) and config.get('DO-NOT-EDIT',
+                                                                                          'install_type') == "exe":
             self._ask_to_install_menu(stdscr)
         else:
             config.set('DO-NOT-EDIT', 'first_run', 'False')
             with open(CONFIG_FILE_PATH, 'w') as configfile:
                 config.write(configfile)
-
 
         options = ["Play Music", "Edit Notesheet", "Settings", "Credits", "Exit"]
         current_option = 0
@@ -1601,7 +1677,7 @@ class MenuManager:
                 if current_option == 0:
                     # Play Music
                     config = Utils().load_config()
-                    notesheet_path = config.get('DEFAULT', 'notesheet_path')
+                    notesheet_path = Utils().adjust_path(config.get('DEFAULT', 'notesheet_path'))
                     notesheet_data = NotesheetUtils().parse_notesheet_file(notesheet_path)
                     self._play_songs_menu(stdscr, notesheet_data)
                 elif current_option == 1:
@@ -1632,11 +1708,11 @@ class MenuManager:
                     # Display current notesheet path to the right of "Change Notesheet Path" option
                     config = Utils().load_config()
                     if i == 0:
-                        notesheet_path = config.get('DEFAULT', 'notesheet_path')
+                        notesheet_path = Utils().adjust_path(config.get('DEFAULT', 'notesheet_path'))
                         stdscr.addstr(1, 30, f"Notesheet Path: {notesheet_path}")
 
                     elif i == 1:
-                        notesheet_master = config.get('DEFAULT', 'master_notesheet')
+                        notesheet_master = Utils().adjust_path(config.get('DEFAULT', 'master_notesheet'))
                         stdscr.addstr(1, 30, f"Notesheet Master: {notesheet_master}")
 
                     elif i == 2:
