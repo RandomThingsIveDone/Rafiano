@@ -792,9 +792,13 @@ class MidiProcessor:
         - The `tpms` parameter is used to convert timestamps into seconds based on the nearest
           tempo map entry.
         """
+
+        config = Utils().load_config()
+        username = config.get('DEFAULT', 'username')
+
         with open(f"{file_path}/{file_name.split('/')[-1]}.notesheet", "w+") as notesheet:
             notesheet.write(
-                f"|{file_name.split('/')[-1]}|RaftMIDI|1.0\n"
+                f"|{file_name.split('/')[-1]}|{username}|1.0\n"
                 "###############################################################################\n"
                 "# Notesheet generated using code from https://github.com/PrzemekkkYT/RaftMIDI #\n"
                 "# Big Thanks to PrzemekkkYT for his work and help adapting his code to the    #\n"
@@ -1111,7 +1115,7 @@ class MenuManager:
                     self._combine_notesheets_menu(stdscr, folder_path)
 
                 elif current_option == 1:
-                    # TODO: remove Notesheet works now but its not pretty yet rework shoudld be done
+                    # TODO: remove Notesheet works now but its not pretty yet rework should be done display in whihc Notesheet the song is
                     # Remove Song
                     notesheet_data = NotesheetUtils().parse_notesheet_file(folder_path)
                     self._delete_song_menu(stdscr, notesheet_data, folder_path)
@@ -1357,7 +1361,6 @@ class MenuManager:
         stdscr.clear()
         stdscr.nodelay(1)
 
-        # Credits art and text (unchanged from your original function)
         credits_art = r"""
         8888888b.            .d888 d8b
         888   Y88b          d88P"  Y8P
@@ -1384,7 +1387,7 @@ class MenuManager:
         stdscr.refresh()
 
         # Initialize snake position and direction
-        snake = [(5, 20), (5, 19), (5, 18)]  # Example initial snake body
+        snake = [(5, 20), (5, 19), (5, 18)]
         direction = None
 
         # Wait for arrow key press to set initial direction
@@ -1394,7 +1397,7 @@ class MenuManager:
                 direction = key
 
         count = 0
-        # Game loop for snake movement and credits display
+        # loop for snake movement and credits display
         new_head = ()
         while True:
             try:
@@ -1499,12 +1502,14 @@ class MenuManager:
                     stdscr.addstr(9, 1, current_art2)
                     stdscr.refresh()
 
-                    # Wait a short time before switching again (optional)
+
                     time.sleep(random.uniform(0.02, 0.4))
 
         curses.endwin()
 
     # TODO: Add a way to uninstall Rafiano
+    # TODO: Add a way to import a notesheet
+    # TODO: Add a way to change the Username
 
     @staticmethod
     def _perform_installation(stdscr):
@@ -1696,7 +1701,7 @@ class MenuManager:
     @staticmethod
     def _settings_menu(stdscr):
         config = Utils().load_config()
-        options = ["Change Notesheet Path", "Change Notesheet Master", "Reset", "Go Back"]
+        options = ["Change Notesheet Path", "Change Notesheet Master", "Set Username", "Reset", "Go Back"]
         current_option = 0
 
         while True:
@@ -1710,12 +1715,13 @@ class MenuManager:
                     if i == 0:
                         notesheet_path = Utils().adjust_path(config.get('DEFAULT', 'notesheet_path'))
                         stdscr.addstr(1, 30, f"Notesheet Path: {notesheet_path}")
-
                     elif i == 1:
                         notesheet_master = Utils().adjust_path(config.get('DEFAULT', 'master_notesheet'))
                         stdscr.addstr(1, 30, f"Notesheet Master: {notesheet_master}")
-
                     elif i == 2:
+                        current_username = config.get('DEFAULT', 'username', fallback='')
+                        stdscr.addstr(1, 30, f"Current Username: {current_username}")
+                    elif i == 3:
                         stdscr.addstr(1, 30, f"Config: set to default")
                 else:
                     stdscr.addstr(i + 1, 1, option)
@@ -1745,7 +1751,7 @@ class MenuManager:
                     stdscr.refresh()
                     stdscr.getch()  # Wait for user input to continue
                 elif current_option == 1:
-                    # Change Notesheet Path
+                    # Change Notesheet Master
                     stdscr.addstr(7, 1, "Enter new notesheet master path:")
                     curses.curs_set(1)
                     stdscr.refresh()
@@ -1760,22 +1766,37 @@ class MenuManager:
                     stdscr.refresh()
                     stdscr.getch()  # Wait for user input to continue
                 elif current_option == 2:
-                    # Reset settings with confirmation
-                    stdscr.addstr(3, 1, "Are you sure you want to reset? Type 'Yes!' to confirm: ")
+                    # Set Username
+                    stdscr.addstr(7, 1, "Enter your username:")
+                    curses.curs_set(1)
                     stdscr.refresh()
                     curses.echo()  # Enable text input
-                    confirmation = stdscr.getstr(4, 1).decode(encoding="utf-8")
+                    username = stdscr.getstr(8, 1).decode(encoding="utf-8")
+                    curses.noecho()  # Disable text input
+                    config.set('DEFAULT', 'username', username)  # Adjust 'DEFAULT' as needed
+                    with open(CONFIG_FILE_PATH, 'w') as configfile:
+                        config.write(configfile)
+                    stdscr.addstr(7, 1, "Username set!                 ")
+                    curses.curs_set(0)
+                    stdscr.refresh()
+                    stdscr.getch()  # Wait for user input to continue
+                elif current_option == 3:
+                    # Reset settings with confirmation
+                    stdscr.addstr(7, 1, "Are you sure you want to reset? Type 'Yes!' to confirm: ")
+                    stdscr.refresh()
+                    curses.echo()  # Enable text input
+                    confirmation = stdscr.getstr(8, 1).decode(encoding="utf-8")
                     curses.noecho()  # Disable text input
                     if confirmation.strip() == "Yes!":
                         Utils().create_default_config(True)
-                        stdscr.addstr(5, 1, "Settings reset!")
+                        stdscr.addstr(7, 1, "Settings reset!                                          ")
                         stdscr.refresh()
                         stdscr.getch()  # Wait for user input to continue
                     else:
-                        stdscr.addstr(5, 1, "Reset canceled!")
+                        stdscr.addstr(7, 1, "Reset canceled!                                          ")
                         stdscr.refresh()
                         stdscr.getch()  # Wait for user input to continue
-                elif current_option == 3:
+                elif current_option == 4:
                     # Go Back
                     return
 
