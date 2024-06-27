@@ -161,6 +161,30 @@ class Utils:
             ),
             None,
         )
+    
+    @staticmethod
+    def sort_dicts_by_weights(groups, group_weights, reverse: bool = False):
+        """
+        Sort nested dictionary by group_weights from same key
+
+        Args:
+        - groups: Dictionary with dictionaries under special key.
+        - group_weights: Dictionary with weights under special key.
+
+        Returns:
+        - Dictionary with sorted dictionaries based on group_weights
+        """
+        sorted_groups = {}
+        for key in groups:
+            inner_group = groups[key]
+            inner_weights = group_weights[key]
+            
+            sorted_inner_keys = sorted(inner_group.keys(), key=lambda k: inner_weights[k], reverse=not reverse)
+            
+            sorted_inner_group = {k: inner_group[k] for k in sorted_inner_keys}
+            
+            sorted_groups[key] = sorted_inner_group
+        return sorted_groups
 
     @staticmethod
     def is_pyinstaller_exe():
@@ -499,10 +523,10 @@ class MidiProcessor:
 
     Methods:
     - parse_midi(file_path):
-      Parses a MIDI file in CSV format and extracts MIDI channels and rows of MIDI events.
+      Parses a MIDI file in CSV format and extracts MIDI tracks and rows of MIDI events.
 
-    - filter_csv(rows, channels, selected):
-      Filters MIDI CSV rows based on selected channels.
+    - filter_csv(rows, tracks, selected):
+      Filters MIDI CSV rows based on selected tracks.
 
     - get_timestamps(csv_string, track_num):
       Extracts timestamps, tempo information, and note events from a MIDI CSV string.
@@ -529,58 +553,58 @@ class MidiProcessor:
     @staticmethod
     def parse_midi(file_path):
         """
-        Parses a MIDI file in CSV format and extracts MIDI channels and rows of MIDI events.
+        Parses a MIDI file in CSV format and extracts MIDI tracks and rows of MIDI events.
 
         Args:
         - file_path (str): The path to the MIDI file in CSV format.
 
         Returns:
-        - sorted_channels (list): Sorted list of unique MIDI channels found in the file.
+        - sorted_tracks (list): Sorted list of unique MIDI tracks found in the file.
         - rows (list): List of rows representing MIDI events in CSV format.
         """
         midi_data = midi_to_csv(file_path)
-        channels = set()
+        tracks = {}
         rows = []
 
         for line in midi_data:
             parts = line.strip().split(", ")
             if parts[2] == "Note_on_c" or parts[2] == "Note_off_c":
-                channels.add(int(parts[3]))
+                tracks[int(parts[0])] = True
 
             rows.append(parts)
 
-        return sorted(channels), rows
+        return dict(sorted(tracks.items(), key=lambda x: x[1])), rows
 
     @staticmethod
-    def filter_csv(rows, channels, selected):
+    def filter_csv(rows, tracks, selected):
         """
-        Filter MIDI CSV rows based on selected channels.
+        Filter MIDI CSV rows based on selected tracks.
 
         Args:
         - rows (list): A list of MIDI CSV rows where each row is a list of strings.
-        - channels (list): A list of MIDI channels corresponding to each row.
-        - selected (list): A list of boolean values indicating whether each channel
+        - tracks (list): A list of MIDI tracks corresponding to each row.
+        - selected (list): A list of boolean values indicating whether each track
           should be included in the filtered output.
 
         Returns:
         - list: A filtered list of MIDI CSV rows (strings) that match the selected
-          channels. Each row is formatted as a comma-separated string.
+          tracks. Each row is formatted as a comma-separated string.
 
         Notes:
         - The function iterates through each row in the 'rows' list and checks if
-          the MIDI event type is 'Note_on_c' or 'Note_off_c'. If the MIDI channel
-          of the event matches a channel marked as selected (True in 'selected'),
+          the MIDI event type is 'Note_on_c' or 'Note_off_c'. If the MIDI track
+          of the event matches a track marked as selected (True in 'selected'),
           the row is included in the filtered output.
-        - Rows that do not match 'Note_on_c' or 'Note_off_c' or whose channel is
+        - Rows that do not match 'Note_on_c' or 'Note_off_c' or whose track is
           not selected are also included in the filtered output.
         """
-        selected_channels = {ch for ch, sel in zip(channels, selected) if sel}
+        selected_tracks = {ch for ch, sel in zip(tracks, selected) if sel}
         filtered_rows = []
 
         for row in rows:
             if len(row) >= 4 and row[2] in {"Note_on_c", "Note_off_c"}:
-                channel = int(row[3])
-                if channel in selected_channels:
+                track = int(row[3])
+                if track in selected_tracks:
                     filtered_rows.append(",".join(row) + "\n")
             else:
                 filtered_rows.append(",".join(row) + "\n")
@@ -613,7 +637,6 @@ class MidiProcessor:
         """
         ppq = 0
         tpms = {}
-        timestamps = {}
         notes = []
 
         for line in csv_string:
@@ -633,38 +656,24 @@ class MidiProcessor:
                         if record[5]:
                             note = record[4]
                             notes.append((note, record[1]))
-                            timestamps[record[1]] = []
                         else:
                             note = record[4]
                             index = self.find_unclosed_note_index(notes, note)
                             if index is not None and record[1] > notes[index][1]:
                                 notes[index] = notes[index] + (record[1],)
-                            timestamps[record[1]] = []
                     if record[2] == "note_off_c":
                         note = record[4]
                         index = self.find_unclosed_note_index(notes, note)
                         if index is not None and record[1] > notes[index][1]:
                             notes[index] = notes[index] + (record[1],)
-                        timestamps[record[1]] = []
             except Exception as exc:
                 self.handle_error(exc)
-
-        timestamps = {ts: [] for ts in sorted(timestamps)}
 
         notes = [note for note in notes if len(note) == 3]
         notes = [(min(self.notes_to_keys, key=lambda x: abs(x - note[0])), *note[1:]) for note in notes]
         notes = sorted(notes, key=lambda x: x[1])
 
-        for timestamp in timestamps:
-            for note in notes:
-                if note[1] == timestamp:
-                    timestamps[timestamp].append((note[0], "start"))
-                elif note[2] == timestamp:
-                    timestamps[timestamp].append((note[0], "end"))
-
-        timestamps = {key: sorted(value, key=lambda x: (x[1] == "start", x[1])) for key, value in timestamps.items()}
-
-        return tpms, timestamps, notes
+        return tpms, notes
 
     @staticmethod
     def find_unclosed_note_index(notes, note):
@@ -757,6 +766,8 @@ class MidiProcessor:
             for i, (start, _notes) in enumerate(notes_per_start.items()):
                 ret_keys = ""
                 ret_modifier = ""
+                ret_howLong = 0.0
+                ret_tillNext = 0.0
 
                 for _note in _notes:
                     if len(_notes) > 1:
@@ -795,6 +806,87 @@ class MidiProcessor:
                         )
                     else:
                         notesheet.write(f"{ret_keys[:-1]} {ret_modifier} {ret_howLong:.4f} {ret_tillNext:.4f}")
+    
+    def notesheet_v2(self, file_path, file_name, tpms, notes):
+        """
+        Generate a notesheet 2.0 file based on MIDI note events.
+
+        Args:
+        - file_path (str): The directory path where the notesheet file will be created.
+        - file_name (str): The name of the MIDI file or input source.
+        - tpms (dict): Dictionary mapping timestamps to tempo values in BPM.
+        - notes (list): List of tuples representing MIDI note events, where each tuple
+          contains (note, start_time, end_time).
+
+        Returns:
+        - None: This function writes the notesheet file to disk but does not return any value.
+
+        Notes:
+        - This method generates a notesheet file (.notesheet) based on MIDI note events
+          extracted from the input file.
+        - The notesheet format is adapted from the RaftMIDI project, acknowledging the
+          original code source and adapting it accordingly.
+        - Notes are grouped by their start times, and for each group, the function calculates
+          the key presses, modifiers (like 'SP' for space), durations, and times until the next note.
+        - The `tpms` parameter is used to convert timestamps into seconds based on the nearest
+          tempo map entry.
+        """
+        with open(f"{file_path}/{file_name.split('/')[-1]}.notesheet", "w+") as notesheet:
+            notesheet.write(
+                f"|{file_name.split('/')[-1]}|RaftMIDI|2.0\n"
+                "###############################################################################\n"
+                "# Notesheet generated using code from https://github.com/PrzemekkkYT/RaftMIDI #\n"
+                "# Big Thanks to PrzemekkkYT for his work and help adapting his code to the    #\n"
+                "# Notesheet format.                                                           #\n"
+                "###############################################################################\n"
+            )
+
+            notes_per_start = {}
+            for note in notes:
+                start = note[1]
+                if start not in notes_per_start:
+                    notes_per_start[start] = [note]
+                if start in notes_per_start and note not in notes_per_start[start]:
+                    notes_per_start[start].append(note)
+
+
+            groups = {}
+            for start, _notes in notes_per_start.items():
+                groups[start] = {"SP": [], "SH": [], "": []}
+                for _note in _notes:
+                    if _note[0] in self.notes_with_shift:
+                        groups[start]["SH"].append(_note)
+                    elif _note[0] in self.notes_with_space:
+                        groups[start]["SP"].append(_note)
+                    else:
+                        groups[start][""].append(_note)
+
+            group_weights = {}
+            for start, group in groups.items():
+                group_weights[start] = {"SP": 0, "SH": 0, "": 0}
+                for _modifier, _notes in group.items():
+                    group_weights[start][_modifier] = len(_notes) * (sum(_note[2] for _note in _notes) - sum(_note[1] for _note in _notes)) * (1.01 if _modifier in ["SP", "SH"] else 1)
+                
+           
+            sorted_groups = Utils().sort_dicts_by_weights(groups, group_weights, True)
+            for start in groups:
+                ret_keys = ""
+                ret_modifier = ""
+                ret_start = 0
+                ret_end = 0
+                for i, (_modifier, _notes) in enumerate(sorted_groups[start].items()):
+                    for _note in _notes:
+                        key = f"{self.notes_to_keys[_note[0]]}"
+                        if key not in ret_keys:
+                            ret_keys += f"{key}|"
+                        ret_modifier = _modifier
+                        cur_tpms = tpms[Utils().nearest_lower(tpms.keys(), _note[1])]
+                        ret_start = _note[1] / 1000 / cur_tpms
+                        ret_end = (_note[2] / 1000 / cur_tpms if i > 1 else ret_start + 0.1)
+                    if len(ret_keys) > 0:
+                        notesheet.write(
+                            f"{ret_keys[:-1]} {ret_modifier} {ret_start:.4f} {ret_end:.4f}\n"
+                        )
 
 
 class NotesheetPlayer:
@@ -1080,7 +1172,7 @@ class MenuManager:
         stdscr.refresh()
 
         curses.echo()  # Enable text input
-        output_path = f"{stdscr.getstr(4, 1).decode(encoding="utf-8").strip()}.notesheet"
+        output_path = f"{stdscr.getstr(4, 1).decode(encoding='utf-8').strip()}.notesheet"
         curses.noecho()  # Disable text input
 
         if not output_path:
@@ -1135,7 +1227,7 @@ class MenuManager:
             input_file_name = input_file.split(".")[0]  # Extract file name without extension
 
             try:
-                channels, rows = MidiProcessor().parse_midi(input_file)
+                tracks, rows = MidiProcessor().parse_midi(input_file)
                 midi_csv = midi_to_csv(input_file)
 
                 # Further processing logic based on parsed MIDI data or CSV
@@ -1149,15 +1241,15 @@ class MenuManager:
             curses.curs_set(0)  # Hide the cursor
 
             current_option = 0
-            selected = [True] * len(channels)
-            title = 'MIDI Channel Selection | Use up/down arrows to navigate, Enter to select channels and continue'
+            track_options = {i:tr for i, tr in enumerate(tracks.keys())}
+            title = 'MIDI Track Selection | Use up/down arrows to navigate, Enter to select tracks and continue'
 
             while True:
                 stdscr.clear()
                 stdscr.addstr(1, 1, title, curses.A_BOLD)
 
-                for i, channel in enumerate(channels):
-                    option_text = f"Channel {channel} {'[x]' if selected[i] else '[ ]'}"
+                for i, track in enumerate(tracks.keys()):
+                    option_text = f"Track {track} {'[x]' if tracks[track] else '[ ]'}"
                     if i == current_option:
                         stdscr.addstr(i + 3, 1, "> " + option_text, curses.A_REVERSE)
                     else:
@@ -1165,28 +1257,29 @@ class MenuManager:
 
                 # Option for continuing
                 continue_text = "Continue"
-                if current_option == len(channels):
-                    stdscr.addstr(len(channels) + 3, 1, "> " + continue_text, curses.A_REVERSE)
+                if current_option == len(tracks):
+                    stdscr.addstr(len(tracks) + 3, 1, "> " + continue_text, curses.A_REVERSE)
                 else:
-                    stdscr.addstr(len(channels) + 3, 1, "  " + continue_text)
+                    stdscr.addstr(len(tracks) + 3, 1, "  " + continue_text)
 
                 stdscr.refresh()
 
                 key = stdscr.getch()
 
                 if key == curses.KEY_UP:
-                    current_option = (current_option - 1) % (len(channels) + 1)
+                    current_option = (current_option - 1) % (len(tracks) + 1)
                 elif key == curses.KEY_DOWN:
-                    current_option = (current_option + 1) % (len(channels) + 1)
+                    current_option = (current_option + 1) % (len(tracks) + 1)
                 elif key == curses.KEY_ENTER or key in [10, 13]:
-                    if current_option < len(channels):
-                        selected[current_option] = not selected[current_option]
+                    if current_option < len(tracks):
+                        # selected[current_option] = not selected[current_option]
+                        tracks[track_options[current_option]] = not tracks[track_options[current_option]]
+                        ...
                     else:
                         break  # Break out of the loop to continue
 
-            # filtered_rows = MidiProcessor().filter_csv(rows, channels, selected) not in use
-
-            tpms, timestamps, notes = MidiProcessor().get_timestamps(midi_csv, selected)
+            # filtered_rows = MidiProcessor().filter_csv(rows, tracks, selected)# not in use
+            tpms, notes = MidiProcessor().get_timestamps(midi_csv, tracks.keys())
 
             options = ["Notesheet V1", "Notesheet V2"]
 
@@ -1214,16 +1307,14 @@ class MenuManager:
                     stdscr.clear()
                     stdscr.refresh()
                     if current_option == 0:
-                        # TODO: read title from MIDI and give this as the name of the notesheet
+                        # TODO: read title from MIDI and give this as the name of the notesheet (Dunno if it's possible ~Przemekkk)
 
                         MidiProcessor().notesheet_v1(notesheet_path, input_file_name, tpms,
                                                      notes)  # Call function for Notesheet V1
                     elif current_option == 1:
-                        # TODO: add function for Notesheet V2
-                        # MidiProcessor().notesheet_v2()
-                        stdscr.addstr(10, 1, "V2 not implemented yet.")
-                        stdscr.getch()
-                        break
+                        # TODO: read title from MIDI and give this as the name of the notesheet (Dunno if it's possible ~Przemekkk)
+                        MidiProcessor().notesheet_v2(notesheet_path, input_file_name, tpms,
+                                                     notes)  # Call function for Notesheet V2
                     stdscr.addstr(10, 1, "Processing complete. Press any key to exit...")
                     stdscr.getch()
                     break
