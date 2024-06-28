@@ -44,7 +44,7 @@ Rafiano brings creativity and enjoyment to **RAFT**.
    - Ensure Python 3.x is installed on your system.
    - Install dependencies by running:
      ```
-     pip install pynput py_midicsv
+     pip install pynput py_midicsv windows-curses
      ```
 
 2. **Download:**
