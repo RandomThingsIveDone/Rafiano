@@ -1299,7 +1299,7 @@ class MenuManager:
         stdscr.refresh()
 
         curses.echo()  # Enable text input
-        output_path = f"{stdscr.getstr(4, 1).decode(encoding='utf-8').strip()}.notesheet"
+        output_path = f"{Utils.clean_user_input(stdscr.getstr(4, 1).decode(encoding='utf-8').strip())}.notesheet"
         curses.noecho()  # Disable text input
 
         if not output_path:
@@ -1348,14 +1348,14 @@ class MenuManager:
             stdscr.refresh()
 
             curses.echo()  # Enable text input
-            input_file = stdscr.getstr(2, 1).decode(encoding="utf-8").strip()
+            input_file_path = stdscr.getstr(2, 1).decode(encoding="utf-8").strip()
             curses.noecho()  # Disable text input
 
-            input_file_name = input_file.split(".")[0]  # Extract file name without extension
+            input_file_name = input_file_path.split(".")[0]  # Extract file name without extension
 
             try:
-                tracks, rows = MidiProcessor().parse_midi(input_file)
-                midi_csv = midi_to_csv(input_file)
+                tracks, rows = MidiProcessor().parse_midi(input_file_path)
+                midi_csv = midi_to_csv(input_file_path)
 
                 # Further processing logic based on parsed MIDI data or CSV
 
@@ -1925,7 +1925,7 @@ class MenuManager:
                     curses.curs_set(1)
                     stdscr.refresh()
                     curses.echo()
-                    username = stdscr.getstr(8, 1).decode(encoding="utf-8")
+                    username = Utils().clean_user_input(stdscr.getstr(8, 1).decode(encoding="utf-8"))
                     curses.noecho()
                     config.set('DEFAULT', 'username', username)
                     with open(CONFIG_FILE_PATH, 'w') as configfile:
