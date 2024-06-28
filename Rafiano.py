@@ -10,7 +10,6 @@
 """
 
 import configparser
-import curses
 import os
 import shutil
 import re
@@ -45,7 +44,7 @@ def handle_import_error(module_name, is_critical, message, continuation_message=
     print(
         "\nIf you are using the executable version of this program and this ERROR occurs, open a GitHub issue with details.")
     print("GitHub: https://github.com/RandomThingsIveDone/Rafiano/issues")
-    print("\n"+ "#" * 60 + "\n")
+    print("\n" + "#" * 60 + "\n")
     if continuation_message:
         print(continuation_message)
         print("#" * 60 + "\n")
@@ -55,6 +54,7 @@ def handle_import_error(module_name, is_critical, message, continuation_message=
 
 
 try:
+    import curses
     from pynput.keyboard import Controller, Key
     from py_midicsv import midi_to_csv
     from py_midicsv.midi.fileio import ValidationError
@@ -64,6 +64,11 @@ except ImportError as e:
     module_name = str(e).split("'")[-2]
 
     error_messages = {
+
+        'windows-curses': {
+            'is_critical': True,
+            'message': "CRITICAL ERROR: Unable to import 'windows-curses' module.\nThis module is essential for Windows console input handling in curses applications."
+        },
         'py_midicsv': {
             'is_critical': False,
             'message': "WARNING: Unable to import 'py_midicsv' module.\nThis module is required for MIDI conversion functionality.",
@@ -76,12 +81,12 @@ except ImportError as e:
         'winshell': {
             'is_critical': False,
             'message': "WARNING: Unable to import 'winshell' module.\nThis module is required for the installation and creating shortcuts.",
-            'continuation_message': "You can continue to use the program, but the installation will not work."
+            'continuation_message': "You can continue to use the program, but the installation will not work as expected."
         },
         'pywin32': {
             'is_critical': False,
             'message': "WARNING: Unable to import 'pywin32' module which is needed for winshell.\nThis module is required for the installation and creating shortcuts.",
-            'continuation_message': "You can continue to use the program, but the installation will not work."
+            'continuation_message': "You can continue to use the program, but the installation will not work as expected."
         }
     }
 
@@ -193,7 +198,7 @@ class Utils:
             ),
             None,
         )
-    
+
     @staticmethod
     def sort_dicts_by_weights(groups, group_weights, reverse: bool = False):
         """
@@ -210,11 +215,11 @@ class Utils:
         for key in groups:
             inner_group = groups[key]
             inner_weights = group_weights[key]
-            
+
             sorted_inner_keys = sorted(inner_group.keys(), key=lambda k: inner_weights[k], reverse=not reverse)
-            
+
             sorted_inner_group = {k: inner_group[k] for k in sorted_inner_keys}
-            
+
             sorted_groups[key] = sorted_inner_group
         return sorted_groups
 
@@ -265,6 +270,39 @@ class Utils:
             return "script"
 
     @staticmethod
+    def clean_user_input(user_input: str, replace_character: str = ""):
+        """
+        Cleans the given user input string by removing or replacing invalid filename characters.
+
+        Invalid characters include: < > : " / \ | ? * # and ASCII control characters (0-31).
+        Leading and trailing whitespace and dots are also removed.
+
+        Parameters:
+        - user_input (str): The string to be cleaned.
+        - replace_character (str): The character to replace invalid characters with. Default is an empty string.
+
+        Returns:
+        - str: The cleaned string with invalid characters removed or replaced.
+
+        Raises:
+        - ValueError: If the resulting cleaned filename is empty.
+        """
+        # Define a regex pattern for invalid filename characters including #
+        invalid_chars_pattern = r'[<>:"/\\|?*#\x00-\x1F]'
+
+        # Replace invalid characters with the specified replacement character
+        cleaned_user_input = re.sub(invalid_chars_pattern, replace_character, user_input)
+
+        # Remove leading or trailing whitespace and dots
+        cleaned_user_input = cleaned_user_input.strip().strip('.')
+
+        # Handle empty filenames after cleaning
+        if not user_input:
+            raise ValueError("Filename cannot be empty after cleaning.")
+
+        return user_input
+
+    @staticmethod
     def is_admin():
         try:
             return ctypes.windll.shell32.IsUserAnAdmin()
@@ -276,12 +314,12 @@ class Utils:
         if os.name == 'nt':
             ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
 
-    def adjust_path(self, input_path):
-        # TODO: impelment a way to when a relative path is in the config file it gets tracerd to the exe not where it started
+    @staticmethod
+    def adjust_path(input_path):
+        # todo: implement a way to when a relative path is in the config file it gets traced to the exe not where it started
         return input_path
 
-
-    def create_programs_shortcut(self,rafiano_folder):
+    def create_programs_shortcut(self, rafiano_folder):
         # Create a shortcut in the Programs directory
         program_shortcut = os.path.join(self.find_all_programs_folder(), "Rafiano.lnk")
         target = os.path.join(rafiano_folder, "Rafiano.exe")
@@ -301,7 +339,6 @@ class Utils:
         shortcut.path = target
         shortcut.icon = icon
         shortcut.write()
-
 
 
 class NotesheetUtils:
@@ -612,6 +649,21 @@ class MidiProcessor:
         self.notes_with_space = [48, 50, 52, 53, 55, 57, 59]
 
     @staticmethod
+    def find_title(file_path):
+        titles = []
+
+        for line in file_path:
+            # Remove brackets and whitespace, then split by commas
+            cleaned_line = line.strip()[1:-1].split(',')
+            row = [elem.strip() for elem in cleaned_line]
+
+            # Check if the third element is "Title_t"
+            if len(row) > 2 and row[2] == "Title_t":
+                titles.append(row[3])  # Assuming the title is in the fourth element
+
+        return titles
+
+    @staticmethod
     def parse_midi(file_path):
         """
         Parses a MIDI file in CSV format and extracts MIDI tracks and rows of MIDI events.
@@ -782,7 +834,7 @@ class MidiProcessor:
         """
         print(f"{message}: {exc}")
 
-    def notesheet_v1(self, file_path, file_name, tpms, notes):
+    def notesheet_v1(self, file_path, file_name, tpms, notes, title):
         """
         Generate a notesheet file based on MIDI note events.
 
@@ -812,7 +864,7 @@ class MidiProcessor:
 
         with open(f"{file_path}/{file_name.split('/')[-1]}.notesheet", "w+") as notesheet:
             notesheet.write(
-                f"|{file_name.split('/')[-1]}|{username}|1.0\n"
+                f"|{title}|{username}|1.0\n"
                 "###############################################################################\n"
                 "# Notesheet generated using code from https://github.com/PrzemekkkYT/RaftMIDI #\n"
                 "# Big Thanks to PrzemekkkYT for his work and help adapting his code to the    #\n"
@@ -871,8 +923,8 @@ class MidiProcessor:
                         )
                     else:
                         notesheet.write(f"{ret_keys[:-1]} {ret_modifier} {ret_howLong:.4f} {ret_tillNext:.4f}")
-    
-    def notesheet_v2(self, file_path, file_name, tpms, notes):
+
+    def notesheet_v2(self, file_path, file_name, tpms, notes, title):
         """
         Generate a notesheet 2.0 file based on MIDI note events.
 
@@ -896,9 +948,13 @@ class MidiProcessor:
         - The `tpms` parameter is used to convert timestamps into seconds based on the nearest
           tempo map entry.
         """
+
+        config = Utils().load_config()
+        username = config.get('DEFAULT', 'username')
+
         with open(f"{file_path}/{file_name.split('/')[-1]}.notesheet", "w+") as notesheet:
             notesheet.write(
-                f"|{file_name.split('/')[-1]}|RaftMIDI|2.0\n"
+                f"|{title}|{username}|2.0\n"
                 "###############################################################################\n"
                 "# Notesheet generated using code from https://github.com/PrzemekkkYT/RaftMIDI #\n"
                 "# Big Thanks to PrzemekkkYT for his work and help adapting his code to the    #\n"
@@ -913,7 +969,6 @@ class MidiProcessor:
                     notes_per_start[start] = [note]
                 if start in notes_per_start and note not in notes_per_start[start]:
                     notes_per_start[start].append(note)
-
 
             groups = {}
             for start, _notes in notes_per_start.items():
@@ -930,9 +985,10 @@ class MidiProcessor:
             for start, group in groups.items():
                 group_weights[start] = {"SP": 0, "SH": 0, "": 0}
                 for _modifier, _notes in group.items():
-                    group_weights[start][_modifier] = len(_notes) * (sum(_note[2] for _note in _notes) - sum(_note[1] for _note in _notes)) * (1.01 if _modifier in ["SP", "SH"] else 1)
-                
-           
+                    group_weights[start][_modifier] = len(_notes) * (
+                            sum(_note[2] for _note in _notes) - sum(_note[1] for _note in _notes)) * (
+                                                          1.01 if _modifier in ["SP", "SH"] else 1)
+
             sorted_groups = Utils().sort_dicts_by_weights(groups, group_weights, True)
             for start in groups:
                 ret_keys = ""
@@ -1188,7 +1244,8 @@ class MenuManager:
         options = ["Combine Notesheets", "Remove Song", "One File Notesheet export", "Add MIDI File", "Go Back"]
         current_option = 0
         config = Utils().load_config()  # Load the configuration
-        folder_path = Utils().adjust_path(config.get('DEFAULT', 'notesheet_path'))  # Get the notesheet path from the configuration
+        folder_path = Utils().adjust_path(
+            config.get('DEFAULT', 'notesheet_path'))  # Get the notesheet path from the configuration
 
         while True:
             stdscr.clear()
@@ -1212,7 +1269,7 @@ class MenuManager:
                     self._combine_notesheets_menu(stdscr, folder_path)
 
                 elif current_option == 1:
-                    # TODO: remove Notesheet works now but its not pretty yet rework should be done display in whihc Notesheet the song is
+                    # TODO: "remove Notesheet" works now but its not pretty yet rework should be done display in which Notesheet the song is
                     # Remove Song
                     notesheet_data = NotesheetUtils().parse_notesheet_file(folder_path)
                     self._delete_song_menu(stdscr, notesheet_data, folder_path)
@@ -1281,7 +1338,7 @@ class MenuManager:
             stdscr.clear()
             stdscr.refresh()
 
-            stdscr.addstr(1, 1, "Enter MIDI file name (e.g., Sandstorm.mid): ")
+            stdscr.addstr(1, 1, "Enter MIDI file path (e.g., Sandstorm.mid): ")
             stdscr.refresh()
 
             curses.echo()  # Enable text input
@@ -1304,8 +1361,12 @@ class MenuManager:
 
             curses.curs_set(0)  # Hide the cursor
 
+            try:
+                title_t = "_".join(MidiProcessor.find_title(midi_csv))
+            except Exception as e:
+                title_t = input_file_name.split('/')[-1]
             current_option = 0
-            track_options = {i:tr for i, tr in enumerate(tracks.keys())}
+            track_options = {i: tr for i, tr in enumerate(tracks.keys())}
             title = 'MIDI Track Selection | Use up/down arrows to navigate, Enter to select tracks and continue'
 
             while True:
@@ -1371,14 +1432,10 @@ class MenuManager:
                     stdscr.clear()
                     stdscr.refresh()
                     if current_option == 0:
-                        # TODO: read title from MIDI and give this as the name of the notesheet (Dunno if it's possible ~Przemekkk)
 
-                        MidiProcessor().notesheet_v1(notesheet_path, input_file_name, tpms,
-                                                     notes)  # Call function for Notesheet V1
+                        MidiProcessor().notesheet_v1(notesheet_path, input_file_name, tpms, notes, title_t)  # Call function for Notesheet V1
                     elif current_option == 1:
-                        # TODO: read title from MIDI and give this as the name of the notesheet (Dunno if it's possible ~Przemekkk)
-                        MidiProcessor().notesheet_v2(notesheet_path, input_file_name, tpms,
-                                                     notes)  # Call function for Notesheet V2
+                        MidiProcessor().notesheet_v2(notesheet_path, input_file_name, tpms, notes, title_t)  # Call function for Notesheet V2
                     stdscr.addstr(10, 1, "Processing complete. Press any key to exit...")
                     stdscr.getch()
                     break
@@ -1598,7 +1655,6 @@ class MenuManager:
                     stdscr.addstr(9, 1, current_art2)
                     stdscr.refresh()
 
-
                     time.sleep(random.uniform(0.02, 0.4))
 
         curses.endwin()
@@ -1655,17 +1711,18 @@ class MenuManager:
             os.remove("config.ini")
             shutil.rmtree("Notesheets")
 
-            stdscr.addstr(6, 1, "Installation completed successfully! \n search for Rafiano in the searchbar or use the desktop shortcut. \n Press any key to close the window.", curses.A_BOLD)
+            stdscr.addstr(6, 1,
+                          "Installation completed successfully! \n search for Rafiano in the searchbar or use the desktop shortcut. \n Press any key to close the window.",
+                          curses.A_BOLD)
             stdscr.refresh()
             stdscr.getch()
-
-
 
             # Close the current instance of the application
             sys.exit()
 
         except PermissionError:
-            stdscr.addstr(7, 1, "Permission denied! Please run as administrator. Press any key to continue", curses.color_pair(1))
+            stdscr.addstr(7, 1, "Permission denied! Please run as administrator. Press any key to continue",
+                          curses.color_pair(1))
             stdscr.refresh()
             stdscr.getch()
         except ValueError as e:
@@ -1796,7 +1853,7 @@ class MenuManager:
     @staticmethod
     def _settings_menu(stdscr):
         config = Utils().load_config()
-        options = ["Change Notesheet Path", "Change Notesheet Master", "Set Username", "Reset", "Go Back"]
+        options = ["Change Notesheet Path", "Change Notesheet Master", "Set Username", "Reset", "Open Rafiano Folder", "Go Back"]
         current_option = 0
 
         while True:
@@ -1805,7 +1862,6 @@ class MenuManager:
             for i, option in enumerate(options):
                 if i == current_option:
                     stdscr.addstr(i + 1, 1, option, curses.A_REVERSE)
-                    # Display current notesheet path to the right of "Change Notesheet Path" option
                     config = Utils().load_config()
                     if i == 0:
                         notesheet_path = Utils().adjust_path(config.get('DEFAULT', 'notesheet_path'))
@@ -1831,68 +1887,67 @@ class MenuManager:
                 current_option = (current_option + 1) % len(options)
             elif key == curses.KEY_ENTER or key in [10, 13]:
                 if current_option == 0:
-                    # Change Notesheet Path
                     stdscr.addstr(7, 1, "Enter new notesheet path:")
                     stdscr.refresh()
                     curses.curs_set(1)
-                    curses.echo()  # Enable text input
+                    curses.echo()
                     new_path = stdscr.getstr(8, 1).decode(encoding="utf-8")
-                    curses.noecho()  # Disable text input
+                    curses.noecho()
                     config.set('DEFAULT', 'notesheet_path', new_path)
                     with open(CONFIG_FILE_PATH, 'w') as configfile:
                         config.write(configfile)
                     stdscr.addstr(7, 1, "Notesheet path changed!")
                     curses.curs_set(0)
                     stdscr.refresh()
-                    stdscr.getch()  # Wait for user input to continue
+                    stdscr.getch()
                 elif current_option == 1:
-                    # Change Notesheet Master
                     stdscr.addstr(7, 1, "Enter new notesheet master path:")
                     curses.curs_set(1)
                     stdscr.refresh()
-                    curses.echo()  # Enable text input
+                    curses.echo()
                     new_path = stdscr.getstr(8, 1).decode(encoding="utf-8")
-                    curses.noecho()  # Disable text input
+                    curses.noecho()
                     config.set('DEFAULT', 'master_notesheet', new_path)
                     with open(CONFIG_FILE_PATH, 'w') as configfile:
                         config.write(configfile)
                     stdscr.addstr(7, 1, "Notesheet master path changed!")
                     curses.curs_set(0)
                     stdscr.refresh()
-                    stdscr.getch()  # Wait for user input to continue
+                    stdscr.getch()
                 elif current_option == 2:
-                    # Set Username
                     stdscr.addstr(7, 1, "Enter your username:")
                     curses.curs_set(1)
                     stdscr.refresh()
-                    curses.echo()  # Enable text input
+                    curses.echo()
                     username = stdscr.getstr(8, 1).decode(encoding="utf-8")
-                    curses.noecho()  # Disable text input
-                    config.set('DEFAULT', 'username', username)  # Adjust 'DEFAULT' as needed
+                    curses.noecho()
+                    config.set('DEFAULT', 'username', username)
                     with open(CONFIG_FILE_PATH, 'w') as configfile:
                         config.write(configfile)
-                    stdscr.addstr(7, 1, "Username set!                 ")
+                    stdscr.addstr(7, 1, "Username set!")
                     curses.curs_set(0)
                     stdscr.refresh()
-                    stdscr.getch()  # Wait for user input to continue
+                    stdscr.getch()
                 elif current_option == 3:
-                    # Reset settings with confirmation
                     stdscr.addstr(7, 1, "Are you sure you want to reset? Type 'Yes!' to confirm: ")
                     stdscr.refresh()
-                    curses.echo()  # Enable text input
+                    curses.echo()
                     confirmation = stdscr.getstr(8, 1).decode(encoding="utf-8")
-                    curses.noecho()  # Disable text input
+                    curses.noecho()
                     if confirmation.strip() == "Yes!":
                         Utils().create_default_config(True)
-                        stdscr.addstr(7, 1, "Settings reset!                                          ")
+                        stdscr.addstr(7, 1, "Settings reset!")
                         stdscr.refresh()
-                        stdscr.getch()  # Wait for user input to continue
+                        stdscr.getch()
                     else:
-                        stdscr.addstr(7, 1, "Reset canceled!                                          ")
+                        stdscr.addstr(7, 1, "Reset canceled!")
                         stdscr.refresh()
-                        stdscr.getch()  # Wait for user input to continue
+                        stdscr.getch()
                 elif current_option == 4:
-                    # Go Back
+                    rafiano_folder = os.path.dirname(Utils().get_exe_path())
+                    os.startfile(rafiano_folder)
+                    return
+                elif current_option == 5:
                     return
 
     def start(self):
