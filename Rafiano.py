@@ -22,7 +22,7 @@ from typing import Dict, List
 from collections import defaultdict
 
 
-def handle_import_error(module_name, is_critical, message, continuation_message=None):
+def handle_import_error(module_name: str, is_critical: bool, message: str, module_pip: str=None, continuation_message: str=None):
     """
     Handles the ImportError for a specified module by printing an appropriate message,
     suggesting installation commands, and optionally exiting the program.
@@ -38,9 +38,12 @@ def handle_import_error(module_name, is_critical, message, continuation_message=
     - If a continuation_message is provided, prints it and waits for user input to continue.
     - If is_critical is True, exits the program after displaying the message.
     """
+
+    if module_pip is None:
+        module_pip = module_name
     print(message)
     print("\nPlease install it by running the following command:")
-    print(f"    pip install {module_name}")
+    print(f"    pip install {module_pip}")
     print(
         "\nIf you are using the executable version of this program and this ERROR occurs, open a GitHub issue with details.")
     print("GitHub: https://github.com/RandomThingsIveDone/Rafiano/issues")
@@ -62,10 +65,12 @@ try:
     import pywin32
 except ImportError as e:
     module_name = str(e).split("'")[-2]
+    print(module_name)
 
     error_messages = {
 
-        'windows-curses': {
+        '_curses': {
+            "module_pip": "windows-curses",
             'is_critical': True,
             'message': "CRITICAL ERROR: Unable to import 'windows-curses' module.\nThis module is essential for Windows console input handling in curses applications."
         },
@@ -96,6 +101,7 @@ except ImportError as e:
             module_name,
             error_info['is_critical'],
             error_info['message'],
+            error_info.get('module_pip'),
             error_info.get('continuation_message')
         )
 
