@@ -46,6 +46,10 @@ Rafiano brings creativity and enjoyment to **RAFT**.
      ```
      pip install pynput py_midicsv windows-curses
      ```
+     or
+     ```
+     pip install -r requirements.txt
+     ```
 
 2. **Download:**
    - Clone or download the Rafiano repository from [GitHub](https://github.com/RandomThingsIveDone/Rafiano).
