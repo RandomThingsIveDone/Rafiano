@@ -22,7 +22,8 @@ from typing import Dict, List
 from collections import defaultdict
 
 
-def handle_import_error(module_name: str, is_critical: bool, message: str, module_pip: str=None, continuation_message: str=None):
+def handle_import_error(module_name: str, is_critical: bool, message: str, module_pip: str = None,
+                        continuation_message: str = None):
     """
     Handles the ImportError for a specified module by printing an appropriate message,
     suggesting installation commands, and optionally exiting the program.
@@ -62,7 +63,7 @@ try:
     from py_midicsv import midi_to_csv
     from py_midicsv.midi.fileio import ValidationError
     import winshell
-    import pywin32
+    import pywin
 except ImportError as e:
     module_name = str(e).split("'")[-2]
     print(module_name)
@@ -277,7 +278,7 @@ class Utils:
 
     @staticmethod
     def clean_user_input(user_input: str, replace_character: str = ""):
-        """
+        r"""
         Cleans the given user input string by removing or replacing invalid filename characters.
 
         Invalid characters include: < > : " / \ | ? * # and ASCII control characters (0-31).
@@ -1439,9 +1440,11 @@ class MenuManager:
                     stdscr.refresh()
                     if current_option == 0:
 
-                        MidiProcessor().notesheet_v1(notesheet_path, input_file_name, tpms, notes, title_t)  # Call function for Notesheet V1
+                        MidiProcessor().notesheet_v1(notesheet_path, input_file_name, tpms, notes,
+                                                     title_t)  # Call function for Notesheet V1
                     elif current_option == 1:
-                        MidiProcessor().notesheet_v2(notesheet_path, input_file_name, tpms, notes, title_t)  # Call function for Notesheet V2
+                        MidiProcessor().notesheet_v2(notesheet_path, input_file_name, tpms, notes,
+                                                     title_t)  # Call function for Notesheet V2
                     stdscr.addstr(10, 1, "Processing complete. Press any key to exit...")
                     stdscr.getch()
                     break
@@ -1768,7 +1771,7 @@ class MenuManager:
 
         while True:
             stdscr.clear()
-            stdscr.addstr(1, 1, f"Welcome! Would you like to install the application? {sys.argv}", curses.A_BOLD)
+            stdscr.addstr(1, 1, f"Welcome! Would you like to install the application? {sys.argv[0]}", curses.A_BOLD)
             for i, option in enumerate(options):
                 if i == current_option:
                     stdscr.addstr(3 + i, 1, f"{option}", curses.A_REVERSE)
@@ -1811,7 +1814,9 @@ class MenuManager:
 
         elif config.getboolean('DO-NOT-EDIT', 'first_run', fallback=False) and config.get('DO-NOT-EDIT',
                                                                                           'install_type') == "exe":
-            self._ask_to_install_menu(stdscr)
+            pass
+            #TODO: ASK TO INSTALL DOSENT WORK PYWIN32 makes problems
+            #self._ask_to_install_menu(stdscr)
         else:
             config.set('DO-NOT-EDIT', 'first_run', 'False')
             with open(CONFIG_FILE_PATH, 'w') as configfile:
@@ -1859,7 +1864,8 @@ class MenuManager:
     @staticmethod
     def _settings_menu(stdscr):
         config = Utils().load_config()
-        options = ["Change Notesheet Path", "Change Notesheet Master", "Set Username", "Reset", "Open Rafiano Folder", "Go Back"]
+        options = ["Change Notesheet Path", "Change Notesheet Master", "Set Username", "Reset", "Open Rafiano Folder",
+                   "Go Back"]
         current_option = 0
 
         while True:
@@ -1968,3 +1974,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+#TODO better wording for  "already installed Rafiano"
+#  - when Rafiano is installed error displays the path to Rafiano
+#  - Repair installation its really broken no time right now to fix, hot fix is to just dont allow people to install
