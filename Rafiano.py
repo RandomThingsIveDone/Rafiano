@@ -1368,10 +1368,12 @@ class MenuManager:
 
             curses.curs_set(0)  # Hide the cursor
 
-            try:
-                title_t = "_".join(MidiProcessor.find_title(midi_csv))
-            except Exception as e:
-                title_t = input_file_name.split('/')[-1]
+
+            #using file name as Name for the Song
+            # #try:
+            #    title_t = "_".join(MidiProcessor.find_title(midi_csv))
+            #except Exception as e:
+            title_t = input_file_name.split('/')[-1]
             current_option = 0
             track_options = {i: tr for i, tr in enumerate(tracks.keys())}
             title = 'MIDI Track Selection | Use up/down arrows to navigate, Enter to select tracks and continue'
