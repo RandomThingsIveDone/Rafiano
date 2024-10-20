@@ -1349,7 +1349,7 @@ class MenuManager:
             stdscr.refresh()
 
             curses.echo()  # Enable text input
-            input_file_path = stdscr.getstr(2, 1).decode(encoding="utf-8").strip()
+            input_file_path = stdscr.getstr(2, 1).decode(encoding="utf-8").strip().replace("\\", "/")
             curses.noecho()  # Disable text input
 
             input_file_name = input_file_path.split(".")[0]  # Extract file name without extension
