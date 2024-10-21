@@ -83,7 +83,7 @@ Rafiano brings creativity and enjoyment to **RAFT**.
 4. **Run:**
    - Open a terminal or command prompt.
    - Navigate to the Rafiano directory.
-   - Run the script using Python:
+   - Run this command in CMD:
      ```
      pyinstaller -F --icon=ico/Rafiano-Circle.ico Rafiano.py
      ```
