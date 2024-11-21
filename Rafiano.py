@@ -1585,10 +1585,9 @@ class MenuManager:
             key = stdscr.getch()
             if key in [curses.KEY_RIGHT, curses.KEY_LEFT, curses.KEY_UP, curses.KEY_DOWN]:
                 direction = key
-            else:
+            elif key != -1 and key not in [curses.KEY_UP, curses.KEY_DOWN, curses.KEY_LEFT, curses.KEY_RIGHT]:
                 stdscr.nodelay(0)
-                break
-
+                return False  # return to get to main menu
 
         count = 0
         # loop for snake movement and credits display
