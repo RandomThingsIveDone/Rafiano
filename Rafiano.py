@@ -1026,7 +1026,7 @@ class NotesheetPlayer:
         pass
 
     @staticmethod
-    def _player_v1(stdscr,song_notes: List[Dict]) -> bool:
+    def _player_v1(stdscr, song_notes: List[Dict]) -> bool:
         """
         Plays the notes of a given song by simulating key presses based on relative timings.
 
@@ -1103,7 +1103,7 @@ class NotesheetPlayer:
         stdscr.nodelay(False)
         return True
 
-    def play(self,stdscr, song_notes: List[Dict], version: str) -> bool:
+    def play(self, stdscr, song_notes: List[Dict], version: str) -> bool:
         """
         Plays the notes of a given song by simulating key presses.
 
@@ -1115,9 +1115,9 @@ class NotesheetPlayer:
             bool: True, if the song was played successfully.
         """
         if version == "1.0":
-            return self._player_v1(stdscr,song_notes)
+            return self._player_v1(stdscr, song_notes)
         elif version == "2.0":
-            return self._player_v2(stdscr,song_notes)
+            return self._player_v2(stdscr, song_notes)
         else:
             raise ValueError("Unsupported version")
 
@@ -1161,7 +1161,7 @@ class MenuManager:
                 if current_option == len(song_options) - 1:  # Exit option selected
                     break
                 else:
-                    stdscr.addstr(9, 1,f"{" "* 100 }")
+                    stdscr.addstr(9, 1, f"{" " * 100}")
                     stdscr.addstr(10, 1, f"{" " * 100}")
                     stdscr.addstr(11, 1, f"{" " * 100}")
                     stdscr.addstr(12, 1, f"{" " * 100}")
@@ -1174,8 +1174,7 @@ class MenuManager:
                         stdscr.refresh()
                         time.sleep(1)
 
-
-                    NotesheetPlayer().play(stdscr,notesheet_data[current_option]["notes"],
+                    NotesheetPlayer().play(stdscr, notesheet_data[current_option]["notes"],
                                            notesheet_data[current_option]['version'])
                     stdscr.clear()
 
@@ -1396,7 +1395,6 @@ class MenuManager:
 
             curses.curs_set(0)  # Hide the cursor
 
-
             #using file name as Name for the Song
             # #try:
             #    title_t = "_".join(MidiProcessor.find_title(midi_csv))
@@ -1587,6 +1585,10 @@ class MenuManager:
             key = stdscr.getch()
             if key in [curses.KEY_RIGHT, curses.KEY_LEFT, curses.KEY_UP, curses.KEY_DOWN]:
                 direction = key
+            else:
+                stdscr.nodelay(0)
+                break
+
 
         count = 0
         # loop for snake movement and credits display
