@@ -1026,7 +1026,7 @@ class NotesheetPlayer:
         pass
 
     @staticmethod
-    def _player_v1(song_notes: List[Dict]) -> bool:
+    def _player_v1(stdscr,song_notes: List[Dict]) -> bool:
         """
         Plays the notes of a given song by simulating key presses based on relative timings.
 
@@ -1037,8 +1037,17 @@ class NotesheetPlayer:
             bool: True, if the song was played successfully.
         """
         keyboard = Controller()
+        stdscr.nodelay(True)
 
         for note_dic in song_notes:
+
+            # Check for user input
+            key = stdscr.getch()
+            if key == ord('p') or key == ord('P'):  # Check for 'P' key press
+                print("Playback stopped.")
+                stdscr.nodelay(False)
+                return False
+
             keyboard.press(note_dic["modifier"])
             for note in note_dic["notes"]:
                 keyboard.press(note)
@@ -1048,10 +1057,11 @@ class NotesheetPlayer:
             keyboard.release(note_dic["modifier"])
             time.sleep(note_dic["release_time"])
 
+        stdscr.nodelay(False)
         return True
 
     @staticmethod
-    def _player_v2(song_notes: List[Dict]) -> bool:
+    def _player_v2(stdscr, song_notes: List[Dict]) -> bool:
         """
         Plays the notes of a given song by simulating key presses based on absolute timings.
 
@@ -1062,6 +1072,7 @@ class NotesheetPlayer:
             bool: True, if the song was played successfully.
         """
         keyboard = Controller()
+        stdscr.nodelay(True)
         _PressRelease = {Key.shift: False, Key.space: False, "1": False, "2": False, "3": False,
                          "4": False, "5": False, "6": False, "7": False, "8": False,
                          "9": False, "0": False}
@@ -1070,6 +1081,14 @@ class NotesheetPlayer:
 
         start_time = time.time()
         for notes in songNotes:
+
+            # Check for user input
+            key = stdscr.getch()
+            if key == ord('p') or key == ord('P'):  # Check for 'P' key press
+                print("Playback stopped.")
+                stdscr.nodelay(False)
+                return False
+
             while time.time() - start_time < notes[0]:
                 time.sleep(0.001)
 
@@ -1081,9 +1100,10 @@ class NotesheetPlayer:
                     keyboard.press(note)
                     _PressRelease[note] = True
 
+        stdscr.nodelay(False)
         return True
 
-    def play(self, song_notes: List[Dict], version: str) -> bool:
+    def play(self,stdscr, song_notes: List[Dict], version: str) -> bool:
         """
         Plays the notes of a given song by simulating key presses.
 
@@ -1095,9 +1115,9 @@ class NotesheetPlayer:
             bool: True, if the song was played successfully.
         """
         if version == "1.0":
-            return self._player_v1(song_notes)
+            return self._player_v1(stdscr,song_notes)
         elif version == "2.0":
-            return self._player_v2(song_notes)
+            return self._player_v2(stdscr,song_notes)
         else:
             raise ValueError("Unsupported version")
 
@@ -1141,6 +1161,11 @@ class MenuManager:
                 if current_option == len(song_options) - 1:  # Exit option selected
                     break
                 else:
+                    stdscr.addstr(9, 1,f"{" "* 100 }")
+                    stdscr.addstr(10, 1, f"{" " * 100}")
+                    stdscr.addstr(11, 1, f"{" " * 100}")
+                    stdscr.addstr(12, 1, f"{" " * 100}")
+
                     stdscr.addstr(10, 1,
                                   f"Playing : {notesheet_data[current_option]['name']} by: {notesheet_data[current_option]['creator']}")
                     stdscr.refresh()
@@ -1148,8 +1173,11 @@ class MenuManager:
                         stdscr.addstr(11, 1, str(i))
                         stdscr.refresh()
                         time.sleep(1)
-                    NotesheetPlayer().play(notesheet_data[current_option]["notes"],
+
+
+                    NotesheetPlayer().play(stdscr,notesheet_data[current_option]["notes"],
                                            notesheet_data[current_option]['version'])
+                    stdscr.clear()
 
     @staticmethod
     def _combine_notesheets_menu(stdscr, folder_path):
