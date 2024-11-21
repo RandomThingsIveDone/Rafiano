@@ -158,7 +158,7 @@ In `config.ini`, you can configure settings such as:
 ---
 
 ## Usage
-
+- To stop a song, bring the Rafiano window into focus and press P.
 - Select a song from your Notesheet file within 5 seconds after starting Rafiano.
 - Enjoy as Rafiano simulates the key presses to play the song in RAFT.
 
