@@ -17,9 +17,13 @@ import time
 import random
 import sys
 import ctypes
+from ctypes import wintypes
 
 from typing import Dict, List
 from collections import defaultdict
+
+CONFIG_FILE_PATH = "config.ini"
+installed_apis = ["pyautogui", "keyboard", "pynput"]
 
 
 def handle_import_error(module_name: str, is_critical: bool, message: str, module_pip: str = None,
@@ -62,14 +66,12 @@ try:
     from pynput.keyboard import Controller, Key
     from py_midicsv import midi_to_csv
     from py_midicsv.midi.fileio import ValidationError
-    import winshell
-    import pywin
+    import keyboard as keyboard_controller
 except ImportError as e:
     module_name = str(e).split("'")[-2]
     print(module_name)
 
     error_messages = {
-
         '_curses': {
             "module_pip": "windows-curses",
             'is_critical': True,
@@ -81,22 +83,23 @@ except ImportError as e:
             'continuation_message': "You can continue to use the program, but MIDI conversion will not be available.\nBig Thanks to Przemekkk for the MIDI conversion code, don't forget to look at his repo:\n    https://github.com/PrzemekkkYT/RaftMIDI \n"
         },
         'pynput': {
-            'is_critical': True,
-            'message': "CRITICAL ERROR: Unable to import 'pynput' module.\nThis module is essential for the program to run."
-        },
-        'winshell': {
             'is_critical': False,
-            'message': "WARNING: Unable to import 'winshell' module.\nThis module is required for the installation and creating shortcuts.",
-            'continuation_message': "You can continue to use the program, but the installation will not work as expected."
+            'message': "WARNING: Unable to import 'pynput' module.\nThis module is required to use the libary 'pynput' as a controller/API method.",
+            'continuation_message': "You can continue to use the program, but the library/api 'pynput' will not be available.\n"
         },
-        'pywin32': {
+        'keyboard': {
             'is_critical': False,
-            'message': "WARNING: Unable to import 'pywin32' module which is needed for winshell.\nThis module is required for the installation and creating shortcuts.",
-            'continuation_message': "You can continue to use the program, but the installation will not work as expected."
-        }
+            'message': "Warning: Unable to import 'keyboard' module.\nThis module is required to use the libary 'keyboard' as a controller/API method.",
+            'continuation_message': "You can continue to use the program, but the library/api 'keyboard' will not be available.\n"
+        },
     }
 
     if module_name in error_messages:
+
+        # Remove the module from the list of installed modules
+        if module_name in installed_apis:
+            lst.remove(item)
+
         error_info = error_messages[module_name]
         handle_import_error(
             module_name,
@@ -105,8 +108,6 @@ except ImportError as e:
             error_info.get('module_pip'),
             error_info.get('continuation_message')
         )
-
-CONFIG_FILE_PATH = "config.ini"
 
 
 class Utils:
@@ -137,7 +138,8 @@ class Utils:
 
             config['DEFAULT'] = {'notesheet_path': 'Notesheets',
                                  'master_notesheet': 'Master.notesheet',
-                                 'username': 'Anonymous'}
+                                 'username': 'Anonymous',
+                                 'api_type': 'pyautogui'}
 
             config['DO-NOT-EDIT'] = {'install_type': f'{self.get_install_type()}',
                                      'first_run': True}
@@ -303,11 +305,7 @@ class Utils:
         # Remove leading or trailing whitespace and dots
         cleaned_user_input = cleaned_user_input.strip().strip('.')
 
-        # Handle empty filenames after cleaning
-        if not user_input:
-            raise ValueError("Filename cannot be empty after cleaning.")
-
-        return user_input
+        return cleaned_user_input
 
     @staticmethod
     def is_admin():
@@ -326,26 +324,243 @@ class Utils:
         # todo: implement a way to when a relative path is in the config file it gets traced to the exe not where it started
         return input_path
 
-    def create_programs_shortcut(self, rafiano_folder):
-        # Create a shortcut in the Programs directory
-        program_shortcut = os.path.join(self.find_all_programs_folder(), "Rafiano.lnk")
-        target = os.path.join(rafiano_folder, "Rafiano.exe")
-        icon = (target, 0)
-        shortcut = winshell.shortcut(program_shortcut)
-        shortcut.path = target
-        shortcut.icon = icon
-        shortcut.write()
 
-    @staticmethod
-    def create_desktop_shortcut(rafiano_folder):
-        # Create a shortcut on the desktop
-        desktop_shortcut = os.path.join(winshell.desktop(), "Rafiano.lnk")
-        target = os.path.join(rafiano_folder, "Rafiano.exe")
-        icon = (target, 0)
-        shortcut = winshell.shortcut(desktop_shortcut)
-        shortcut.path = target
-        shortcut.icon = icon
-        shortcut.write()
+class PyAutoGuiBareBones:
+    # Barebones implementation of PyAutoGUI keyboard functions.
+    # Based on https://github.com/asweigart/pyautogui/blob/master/pyautogui/_pyautogui_win.py
+    # BSD license
+    # Al Sweigart al@inventwithpython.com
+    """A class for Windows-specific keyboard automation using Windows API."""
+
+    # Key name constants
+    KEY_NAMES = [
+        "\t", "\n", "\r", " ", "!", '"', "#", "$", "%", "&", "'", "(", ")", "*",
+        "+", ",", "-", ".", "/", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+        ":", ";", "<", "=", ">", "?", "@", "[", "\\", "]", "^", "_", "",
+        "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o",
+        "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "{", "|", "}", "~",
+        "accept", "add", "alt", "altleft", "altright", "apps", "backspace",
+        "browserback", "browserfavorites", "browserforward", "browserhome",
+        "browserrefresh", "browsersearch", "browserstop", "capslock", "clear",
+        "convert", "ctrl", "ctrlleft", "ctrlright", "decimal", "del", "delete",
+        "divide", "down", "end", "enter", "esc", "escape", "execute",
+        "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12",
+        "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20", "f21", "f22",
+        "f23", "f24", "final", "fn", "hanguel", "hangul", "hanja", "help", "home",
+        "insert", "junja", "kana", "kanji", "launchapp1", "launchapp2", "launchmail",
+        "launchmediaselect", "left", "modechange", "multiply", "nexttrack",
+        "nonconvert", "num0", "num1", "num2", "num3", "num4", "num5", "num6", "num7",
+        "num8", "num9", "numlock", "pagedown", "pageup", "pause", "pgdn", "pgup",
+        "playpause", "prevtrack", "print", "printscreen", "prntscrn", "prtsc",
+        "prtscr", "return", "right", "scrolllock", "select", "separator", "shift",
+        "shiftleft", "shiftright", "sleep", "space", "stop", "subtract", "tab", "up",
+        "volumedown", "volumemute", "volumeup", "win", "winleft", "winright", "yen",
+        "command", "option", "optionleft", "optionright"
+    ]
+
+    # Key event flags
+    KEYEVENTF_KEYDOWN = 0x0000
+    KEYEVENTF_KEYUP = 0x0002
+
+    def __init__(self):
+        """Initialize the Windows Keyboard Automation."""
+
+        # Create keyboard mapping
+        self.keyboard_mapping = self._create_keyboard_mapping()
+
+    def _create_keyboard_mapping(self):
+        """Create the keyboard mapping dictionary."""
+        # Initialize mapping with None for all key names
+        mapping = dict([(key, None) for key in self.KEY_NAMES])
+
+        # Update with Windows-specific key mappings
+        mapping.update({
+            'backspace': 0x08,  # VK_BACK
+            '\b': 0x08,  # VK_BACK
+            'super': 0x5B,  #VK_LWIN
+            'tab': 0x09,  # VK_TAB
+            '\t': 0x09,  # VK_TAB
+            'clear': 0x0c,  # VK_CLEAR
+            'enter': 0x0d,  # VK_RETURN
+            '\n': 0x0d,  # VK_RETURN
+            'return': 0x0d,  # VK_RETURN
+            'shift': 0x10,  # VK_SHIFT
+            'ctrl': 0x11,  # VK_CONTROL
+            'alt': 0x12,  # VK_MENU
+            'pause': 0x13,  # VK_PAUSE
+            'capslock': 0x14,  # VK_CAPITAL
+            'kana': 0x15,  # VK_KANA
+            'hanguel': 0x15,  # VK_HANGUEL
+            'hangul': 0x15,  # VK_HANGUL
+            'junja': 0x17,  # VK_JUNJA
+            'final': 0x18,  # VK_FINAL
+            'hanja': 0x19,  # VK_HANJA
+            'kanji': 0x19,  # VK_KANJI
+            'esc': 0x1b,  # VK_ESCAPE
+            'escape': 0x1b,  # VK_ESCAPE
+            'convert': 0x1c,  # VK_CONVERT
+            'nonconvert': 0x1d,  # VK_NONCONVERT
+            'accept': 0x1e,  # VK_ACCEPT
+            'modechange': 0x1f,  # VK_MODECHANGE
+            ' ': 0x20,  # VK_SPACE
+            'space': 0x20,  # VK_SPACE
+            'pgup': 0x21,  # VK_PRIOR
+            'pgdn': 0x22,  # VK_NEXT
+            'pageup': 0x21,  # VK_PRIOR
+            'pagedown': 0x22,  # VK_NEXT
+            'end': 0x23,  # VK_END
+            'home': 0x24,  # VK_HOME
+            'left': 0x25,  # VK_LEFT
+            'up': 0x26,  # VK_UP
+            'right': 0x27,  # VK_RIGHT
+            'down': 0x28,  # VK_DOWN
+            'select': 0x29,  # VK_SELECT
+            'print': 0x2a,  # VK_PRINT
+            'execute': 0x2b,  # VK_EXECUTE
+            'prtsc': 0x2c,  # VK_SNAPSHOT
+            'prtscr': 0x2c,  # VK_SNAPSHOT
+            'prntscrn': 0x2c,  # VK_SNAPSHOT
+            'printscreen': 0x2c,  # VK_SNAPSHOT
+            'insert': 0x2d,  # VK_INSERT
+            'del': 0x2e,  # VK_DELETE
+            'delete': 0x2e,  # VK_DELETE
+            'help': 0x2f,  # VK_HELP
+            'win': 0x5b,  # VK_LWIN
+            'winleft': 0x5b,  # VK_LWIN
+            'winright': 0x5c,  # VK_RWIN
+            'apps': 0x5d,  # VK_APPS
+            'sleep': 0x5f,  # VK_SLEEP
+            'num0': 0x60,  # VK_NUMPAD0
+            'num1': 0x61,  # VK_NUMPAD1
+            'num2': 0x62,  # VK_NUMPAD2
+            'num3': 0x63,  # VK_NUMPAD3
+            'num4': 0x64,  # VK_NUMPAD4
+            'num5': 0x65,  # VK_NUMPAD5
+            'num6': 0x66,  # VK_NUMPAD6
+            'num7': 0x67,  # VK_NUMPAD7
+            'num8': 0x68,  # VK_NUMPAD8
+            'num9': 0x69,  # VK_NUMPAD9
+            'multiply': 0x6a,  # VK_MULTIPLY  ??? Is this the numpad *?
+            'add': 0x6b,  # VK_ADD  ??? Is this the numpad +?
+            'separator': 0x6c,  # VK_SEPARATOR  ??? Is this the numpad enter?
+            'subtract': 0x6d,  # VK_SUBTRACT  ??? Is this the numpad -?
+            'decimal': 0x6e,  # VK_DECIMAL
+            'divide': 0x6f,  # VK_DIVIDE
+            'f1': 0x70,  # VK_F1
+            'f2': 0x71,  # VK_F2
+            'f3': 0x72,  # VK_F3
+            'f4': 0x73,  # VK_F4
+            'f5': 0x74,  # VK_F5
+            'f6': 0x75,  # VK_F6
+            'f7': 0x76,  # VK_F7
+            'f8': 0x77,  # VK_F8
+            'f9': 0x78,  # VK_F9
+            'f10': 0x79,  # VK_F10
+            'f11': 0x7a,  # VK_F11
+            'f12': 0x7b,  # VK_F12
+            'f13': 0x7c,  # VK_F13
+            'f14': 0x7d,  # VK_F14
+            'f15': 0x7e,  # VK_F15
+            'f16': 0x7f,  # VK_F16
+            'f17': 0x80,  # VK_F17
+            'f18': 0x81,  # VK_F18
+            'f19': 0x82,  # VK_F19
+            'f20': 0x83,  # VK_F20
+            'f21': 0x84,  # VK_F21
+            'f22': 0x85,  # VK_F22
+            'f23': 0x86,  # VK_F23
+            'f24': 0x87,  # VK_F24
+            'numlock': 0x90,  # VK_NUMLOCK
+            'scrolllock': 0x91,  # VK_SCROLL
+            'shiftleft': 0xa0,  # VK_LSHIFT
+            'shiftright': 0xa1,  # VK_RSHIFT
+            'ctrlleft': 0xa2,  # VK_LCONTROL
+            'ctrlright': 0xa3,  # VK_RCONTROL
+            'altleft': 0xa4,  # VK_LMENU
+            'altright': 0xa5,  # VK_RMENU
+            'browserback': 0xa6,  # VK_BROWSER_BACK
+            'browserforward': 0xa7,  # VK_BROWSER_FORWARD
+            'browserrefresh': 0xa8,  # VK_BROWSER_REFRESH
+            'browserstop': 0xa9,  # VK_BROWSER_STOP
+            'browsersearch': 0xaa,  # VK_BROWSER_SEARCH
+            'browserfavorites': 0xab,  # VK_BROWSER_FAVORITES
+            'browserhome': 0xac,  # VK_BROWSER_HOME
+            'volumemute': 0xad,  # VK_VOLUME_MUTE
+            'volumedown': 0xae,  # VK_VOLUME_DOWN
+            'volumeup': 0xaf,  # VK_VOLUME_UP
+            'nexttrack': 0xb0,  # VK_MEDIA_NEXT_TRACK
+            'prevtrack': 0xb1,  # VK_MEDIA_PREV_TRACK
+            'stop': 0xb2,  # VK_MEDIA_STOP
+            'playpause': 0xb3,  # VK_MEDIA_PLAY_PAUSE
+            'launchmail': 0xb4,  # VK_LAUNCH_MAIL
+            'launchmediaselect': 0xb5,  # VK_LAUNCH_MEDIA_SELECT
+            'launchapp1': 0xb6,  # VK_LAUNCH_APP1
+            'launchapp2': 0xb7,  # VK_LAUNCH_APP2
+        })
+
+        # Populate basic printable ASCII characters
+        for c in range(32, 128):
+            mapping[chr(c)] = ctypes.windll.user32.VkKeyScanA(ctypes.wintypes.WCHAR(chr(c)))
+
+        return mapping
+
+    def press(self, key):
+        """
+        renamed from _keydown(self, key): to release(self, key) to simplify usage
+
+        Perform a keyboard key press without release.
+
+        Args:
+            key (str): The key to be pressed down.
+        """
+        if key not in self.keyboard_mapping or self.keyboard_mapping[key] is None:
+            return
+
+        mods, vk_code = divmod(self.keyboard_mapping[key], 0x100)
+
+        # Handle modifier keys
+        modifier_keys = [
+            (mods & 4, 0x12),  # Alt
+            (mods & 2, 0x11),  # Ctrl
+            (mods & 1, 0x10)  # Shift
+        ]
+
+        # Press down modifier keys if needed
+        for apply_mod, vk_mod in modifier_keys:
+            if apply_mod:
+                ctypes.windll.user32.keybd_event(vk_mod, 0, self.KEYEVENTF_KEYDOWN, 0)
+
+        # Press the main key
+        ctypes.windll.user32.keybd_event(vk_code, 0, self.KEYEVENTF_KEYDOWN, 0)
+
+    def release(self, key):
+        """
+        renamed from _keyup(self, key): to release(self, key) to simplify usage
+
+        Args:
+        Perform a keyboard key release.
+
+        Args:
+            key (str): The key to be released.
+        """
+        if key not in self.keyboard_mapping or self.keyboard_mapping[key] is None:
+            return
+
+        mods, vk_code = divmod(self.keyboard_mapping[key], 0x100)
+
+        # Release the main key
+        ctypes.windll.user32.keybd_event(vk_code, 0, self.KEYEVENTF_KEYUP, 0)
+
+        # Release modifier keys if needed
+        modifier_keys = [
+            (mods & 1, 0x10),  # Shift
+            (mods & 2, 0x11),  # Ctrl
+            (mods & 4, 0x12)  # Alt
+        ]
+
+        for apply_mod, vk_mod in modifier_keys:
+            if apply_mod:
+                ctypes.windll.user32.keybd_event(vk_mod, 0, self.KEYEVENTF_KEYUP, 0)
 
 
 class NotesheetUtils:
@@ -423,11 +638,11 @@ class NotesheetUtils:
             elif read_notesheet:
                 split_notes = notesheet_line.split(" ")
                 if split_notes[1].upper() == "":
-                    modifier_key = Key.up
+                    modifier_key = "up"
                 elif split_notes[1].upper() == "SH":
-                    modifier_key = Key.shift
+                    modifier_key = "shift"
                 elif split_notes[1].upper() == "SP":
-                    modifier_key = Key.space
+                    modifier_key = "space"
                 else:
                     raise Exception("Invalid modifier value")
                 try:
@@ -1022,11 +1237,99 @@ class NotesheetPlayer:
     Class for playing notesheets based on different player versions.
     """
 
+    class _Translate:
+        """
+        Class for translating special keys into any format.
+        """
+
+        # Dictionary for translating special keys into pynput format
+        pynput_key_map = {
+            "space": Key.space,
+            "up": Key.up,
+            "down": Key.down,
+            "left": Key.left,
+            "right": Key.right,
+            "shift": Key.shift,
+            "shift_r": Key.shift_r,  # Right Shift
+            "ctrl": Key.ctrl,
+            "ctrl_r": Key.ctrl_r,  # Right Control
+            "alt": Key.alt,
+            "alt_r": Key.alt_r,  # Right Alt
+            "enter": Key.enter,
+            "tab": Key.tab,
+            "esc": Key.esc,
+            "backspace": Key.backspace,
+            "delete": Key.delete,
+            "caps_lock": Key.caps_lock,
+            "num_lock": Key.num_lock
+        }
+
+        pyautogui_key_map = {
+            "shift": "shiftright",
+        }
+
+        keyboard_key_map = {}
+
+        def __init__(self, translate_type="keyboard"):
+            if translate_type == "pynput":
+                self.special_key_map = self.pynput_key_map
+            elif translate_type == "pyautogui":
+                self.special_key_map = self.pyautogui_key_map
+            elif translate_type == "keyboard":
+                self.special_key_map = self.keyboard_key_map
+            else:
+                raise ValueError("Unsupported translation type.")
+
+        def key(self, key):
+            """ Helper function to translate string key names to pynput special keys. """
+            if key in self.special_key_map:
+                return self.special_key_map[key]
+            else:
+                return key  # If the key is not special, return it as is
+
     def __init__(self):
         pass
 
-    @staticmethod
-    def _player_v1(stdscr, song_notes: List[Dict]) -> bool:
+    class Keyboard:
+        """ Class for handling keyboard events. """
+
+        def __init__(self, api_type="pyautogui"):
+            """
+            Initialize the keyboard controller with the specified API type.
+
+            :param api_type: The type of API to use. Options: 'pynput' or 'autopy'.
+            """
+            self.controller_type = api_type
+
+            if self.controller_type == "pynput":
+                self.keyboardC = Controller()
+                self.translate = NotesheetPlayer._Translate(translate_type="pynput")
+
+            elif self.controller_type == "keyboard":
+                self.keyboardC = keyboard_controller
+                self.translate = NotesheetPlayer._Translate(translate_type="keyboard")
+
+            elif self.controller_type == "pyautogui":
+                self.keyboardC = PyAutoGuiBareBones()
+                self.translate = NotesheetPlayer._Translate(translate_type="pyautogui")
+            else:
+                raise ValueError("Unsupported controller type.")
+
+        def release(self, key):
+            """ Releases a key based on the controller type. """
+            if key == "up":
+                return
+
+            self.keyboardC.release(self.translate.key(key))
+
+        def press(self, key):
+            """ Presses a key based on the controller type. """
+            if key == "up":
+                return
+
+            self.keyboardC.press(self.translate.key(key))
+
+    def _player_v1(self, stdscr, api_type, song_notes: List[Dict]) -> bool:
         """
         Plays the notes of a given song by simulating key presses based on relative timings.
 
@@ -1036,7 +1339,7 @@ class NotesheetPlayer:
         Returns:
             bool: True, if the song was played successfully.
         """
-        keyboard = Controller()
+        keyboard = self.Keyboard(api_type)
         stdscr.nodelay(True)
 
         for note_dic in song_notes:
@@ -1060,8 +1363,7 @@ class NotesheetPlayer:
         stdscr.nodelay(False)
         return True
 
-    @staticmethod
-    def _player_v2(stdscr, song_notes: List[Dict]) -> bool:
+    def _player_v2(self, stdscr, api_type, song_notes: List[Dict]) -> bool:
         """
         Plays the notes of a given song by simulating key presses based on absolute timings.
 
@@ -1071,9 +1373,9 @@ class NotesheetPlayer:
         Returns:
             bool: True, if the song was played successfully.
         """
-        keyboard = Controller()
+        keyboard = self.Keyboard(api_type)
         stdscr.nodelay(True)
-        _PressRelease = {Key.shift: False, Key.space: False, "1": False, "2": False, "3": False,
+        _PressRelease = {"shift": False, "space": False, "1": False, "2": False, "3": False,
                          "4": False, "5": False, "6": False, "7": False, "8": False,
                          "9": False, "0": False}
 
@@ -1103,7 +1405,7 @@ class NotesheetPlayer:
         stdscr.nodelay(False)
         return True
 
-    def play(self, stdscr, song_notes: List[Dict], version: str) -> bool:
+    def play(self, stdscr, api_type, song_notes: List[Dict], version: str) -> bool:
         """
         Plays the notes of a given song by simulating key presses.
 
@@ -1115,9 +1417,9 @@ class NotesheetPlayer:
             bool: True, if the song was played successfully.
         """
         if version == "1.0":
-            return self._player_v1(stdscr, song_notes)
+            return self._player_v1(stdscr, api_type, song_notes)
         elif version == "2.0":
-            return self._player_v2(stdscr, song_notes)
+            return self._player_v2(stdscr, api_type, song_notes)
         else:
             raise ValueError("Unsupported version")
 
@@ -1126,8 +1428,60 @@ class MenuManager:
     def __init__(self):
         pass
 
+    #TODO: make whole Menu manger class more readable
+
     @staticmethod
-    def _play_songs_menu(stdscr, notesheet_data):
+    def _select_api(stdscr, installed_apis, last_line, config, CONFIG_FILE_PATH):
+        """
+        Allow the user to select an API type from a list using arrow keys.
+
+        Args:
+            stdscr: Curses screen object.
+            installed_apis: List of available API types.
+            last_line: Line number for displaying prompts.
+            config: ConfigParser object.
+            CONFIG_FILE_PATH: Path to the configuration file.
+        """
+        curses.curs_set(0)  # Hide the cursor
+        current_selection = 0  # Start with the first item selected
+
+        while True:
+            # Clear the screen
+            stdscr.clear()
+
+            # Display the instruction
+            stdscr.addstr(last_line, 1, "Use UP/DOWN to select your API type. Press ENTER to confirm.")
+
+            # Display the list of APIs with the current selection highlighted
+            for idx, api in enumerate(installed_apis):
+                if idx == current_selection:
+                    stdscr.attron(curses.A_REVERSE)  # Highlight the selected line
+                    stdscr.addstr(last_line + 2 + idx, 1, f"> {api}")
+                    stdscr.attroff(curses.A_REVERSE)
+                else:
+                    stdscr.addstr(last_line + 2 + idx, 1, f"  {api}")
+
+            stdscr.refresh()
+
+            # Get user input
+            key = stdscr.getch()
+
+            if key == curses.KEY_UP and current_selection > 0:
+                current_selection -= 1
+            elif key == curses.KEY_DOWN and current_selection < len(installed_apis) - 1:
+                current_selection += 1
+            elif key == curses.KEY_ENTER or key in [10, 13]:  # ENTER key
+                selected_api = installed_apis[current_selection]
+                config.set('DEFAULT', 'api_type', selected_api)
+                with open(CONFIG_FILE_PATH, 'w') as configfile:
+                    config.write(configfile)
+                stdscr.addstr(last_line + len(installed_apis) + 3, 1, f"API type set to '{selected_api}'!")
+                stdscr.refresh()
+                stdscr.getch()  # Wait for the user to acknowledge
+                break
+
+    @staticmethod
+    def _play_songs_menu(stdscr, api_type, notesheet_data):
         curses.curs_set(0)  # Hide the cursor
         stdscr.clear()
         stdscr.refresh()
@@ -1161,10 +1515,10 @@ class MenuManager:
                 if current_option == len(song_options) - 1:  # Exit option selected
                     break
                 else:
-                    stdscr.addstr(9, 1, f"{" " * 100}")
-                    stdscr.addstr(10, 1, f"{" " * 100}")
-                    stdscr.addstr(11, 1, f"{" " * 100}")
-                    stdscr.addstr(12, 1, f"{" " * 100}")
+                    stdscr.addstr(9, 1, " " * 100)
+                    stdscr.addstr(10, 1, " " * 100)
+                    stdscr.addstr(11, 1, " " * 100)
+                    stdscr.addstr(12, 1, " " * 100)
 
                     stdscr.addstr(10, 1,
                                   f"Playing : {notesheet_data[current_option]['name']} by: {notesheet_data[current_option]['creator']}")
@@ -1174,7 +1528,7 @@ class MenuManager:
                         stdscr.refresh()
                         time.sleep(1)
 
-                    NotesheetPlayer().play(stdscr, notesheet_data[current_option]["notes"],
+                    NotesheetPlayer().play(stdscr, api_type, notesheet_data[current_option]["notes"],
                                            notesheet_data[current_option]['version'])
                     stdscr.clear()
 
@@ -1303,8 +1657,8 @@ class MenuManager:
                     self._combine_notesheets_menu(stdscr, folder_path)
 
                 elif current_option == 1:
-                    # TODO: "remove Notesheet" works now but its not pretty yet rework should be done display in which Notesheet the song is
-                    # Remove Song
+                    # TODO: "remove Notesheet" works now but its not pretty yet rework should be done display in
+                    #  which Notesheet the song is Remove Song
                     notesheet_data = NotesheetUtils().parse_notesheet_file(folder_path)
                     self._delete_song_menu(stdscr, notesheet_data, folder_path)
                 elif current_option == 2:
@@ -1330,7 +1684,7 @@ class MenuManager:
         output_path = f"{Utils.clean_user_input(stdscr.getstr(4, 1).decode(encoding='utf-8').strip())}.notesheet"
         curses.noecho()  # Disable text input
 
-        if not output_path:
+        if not output_path or output_path.endswith(".notesheet"):
             stdscr.addstr(5, 1, "Invalid output path. Please provide a valid path.")
             stdscr.refresh()
             stdscr.getch()  # Wait for user input to continue
@@ -1338,7 +1692,7 @@ class MenuManager:
 
         notesheets = NotesheetUtils().list_notesheets(folder_path)
 
-        #code to check if the ourput already exist if yes error lese create
+        #code to check if the output already exist if yes error lese create
         if os.path.exists(output_path):
             stdscr.addstr(5, 1, f"Notesheet already exists at {output_path}")
             stdscr.refresh()
@@ -1877,8 +2231,9 @@ class MenuManager:
                     # Play Music
                     config = Utils().load_config()
                     notesheet_path = Utils().adjust_path(config.get('DEFAULT', 'notesheet_path'))
+                    api_type = config.get('DEFAULT', 'api_type')
                     notesheet_data = NotesheetUtils().parse_notesheet_file(notesheet_path)
-                    self._play_songs_menu(stdscr, notesheet_data)
+                    self._play_songs_menu(stdscr, api_type, notesheet_data)
                 elif current_option == 1:
                     # Edit Notesheet
                     self._edit_notesheet_menu(stdscr)
@@ -1892,16 +2247,17 @@ class MenuManager:
                     # Exit
                     break
 
-    @staticmethod
-    def _settings_menu(stdscr):
+    def _settings_menu(self, stdscr):
         config = Utils().load_config()
-        options = ["Change Notesheet Path", "Change Notesheet Master", "Set Username", "Reset", "Open Rafiano Folder",
+        options = ["Change Notesheet Path", "Change Notesheet Master", "Set Username", "API type", "Reset",
+                   "Open Rafiano Folder",
                    "Go Back"]
         current_option = 0
+        last_line = len(options) + 2
 
         while True:
             stdscr.clear()
-            stdscr.addstr(5, 30, f'program path: "{Utils().get_exe_path()}"')
+            stdscr.addstr(6, 30, f'program path: "{Utils().get_exe_path()}"')
             for i, option in enumerate(options):
                 if i == current_option:
                     stdscr.addstr(i + 1, 1, option, curses.A_REVERSE)
@@ -1916,6 +2272,9 @@ class MenuManager:
                         current_username = config.get('DEFAULT', 'username', fallback='')
                         stdscr.addstr(1, 30, f"Current Username: {current_username}")
                     elif i == 3:
+                        api_type = config.get('DEFAULT', 'api_type', fallback='')
+                        stdscr.addstr(1, 30, f"API Type: {api_type}")
+                    elif i == 4:
                         stdscr.addstr(1, 30, f"Config: set to default")
                 else:
                     stdscr.addstr(i + 1, 1, option)
@@ -1930,7 +2289,7 @@ class MenuManager:
                 current_option = (current_option + 1) % len(options)
             elif key == curses.KEY_ENTER or key in [10, 13]:
                 if current_option == 0:
-                    stdscr.addstr(7, 1, "Enter new notesheet path:")
+                    stdscr.addstr(last_line, 1, "Enter new notesheet path:")
                     stdscr.refresh()
                     curses.curs_set(1)
                     curses.echo()
@@ -1939,12 +2298,12 @@ class MenuManager:
                     config.set('DEFAULT', 'notesheet_path', new_path)
                     with open(CONFIG_FILE_PATH, 'w') as configfile:
                         config.write(configfile)
-                    stdscr.addstr(7, 1, "Notesheet path changed!")
+                    stdscr.addstr(last_line, 1, "Notesheet path changed!")
                     curses.curs_set(0)
                     stdscr.refresh()
                     stdscr.getch()
                 elif current_option == 1:
-                    stdscr.addstr(7, 1, "Enter new notesheet master path:")
+                    stdscr.addstr(last_line, 1, "Enter new notesheet master path:")
                     curses.curs_set(1)
                     stdscr.refresh()
                     curses.echo()
@@ -1953,12 +2312,12 @@ class MenuManager:
                     config.set('DEFAULT', 'master_notesheet', new_path)
                     with open(CONFIG_FILE_PATH, 'w') as configfile:
                         config.write(configfile)
-                    stdscr.addstr(7, 1, "Notesheet master path changed!")
+                    stdscr.addstr(last_line, 1, "Notesheet master path changed!")
                     curses.curs_set(0)
                     stdscr.refresh()
                     stdscr.getch()
                 elif current_option == 2:
-                    stdscr.addstr(7, 1, "Enter your username:")
+                    stdscr.addstr(last_line, 1, "Enter your username:")
                     curses.curs_set(1)
                     stdscr.refresh()
                     curses.echo()
@@ -1967,30 +2326,33 @@ class MenuManager:
                     config.set('DEFAULT', 'username', username)
                     with open(CONFIG_FILE_PATH, 'w') as configfile:
                         config.write(configfile)
-                    stdscr.addstr(7, 1, "Username set!")
+                    stdscr.addstr(last_line, 1, "Username set!")
                     curses.curs_set(0)
                     stdscr.refresh()
                     stdscr.getch()
                 elif current_option == 3:
-                    stdscr.addstr(7, 1, "Are you sure you want to reset? Type 'Yes!' to confirm: ")
+                    self._select_api(stdscr, installed_apis, last_line, config, CONFIG_FILE_PATH)
+
+                elif current_option == 4:
+                    stdscr.addstr(last_line, 1, "Are you sure you want to reset? Type 'Yes!' to confirm: ")
                     stdscr.refresh()
                     curses.echo()
                     confirmation = stdscr.getstr(8, 1).decode(encoding="utf-8")
                     curses.noecho()
                     if confirmation.strip() == "Yes!":
                         Utils().create_default_config(True)
-                        stdscr.addstr(7, 1, "Settings reset!")
+                        stdscr.addstr(last_line, 1, "Settings reset!" + "" * 50)
                         stdscr.refresh()
                         stdscr.getch()
                     else:
-                        stdscr.addstr(7, 1, "Reset canceled!")
+                        stdscr.addstr(last_line, 1, "Reset canceled!")
                         stdscr.refresh()
                         stdscr.getch()
-                elif current_option == 4:
+                elif current_option == 5:
                     rafiano_folder = os.path.dirname(Utils().get_exe_path())
                     os.startfile(rafiano_folder)
                     return
-                elif current_option == 5:
+                elif current_option == 6:
                     return
 
     def start(self):
@@ -2006,6 +2368,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-#TODO better wording for  "already installed Rafiano"
+# TODO better wording for  "already installed Rafiano"
 #  - when Rafiano is installed error displays the path to Rafiano
 #  - Repair installation its really broken no time right now to fix, hot fix is to just dont allow people to install
